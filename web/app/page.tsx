@@ -18,6 +18,7 @@ import {
   Code,
   FolderKanban,
   Image as ImageIcon,
+  Zap,
 } from "lucide-react";
 
 import { MergePdfTool } from "@/components/tools/pdf/merge-pdf";
@@ -34,6 +35,8 @@ import { WatermarkImageTool } from "@/components/tools/image/watermark-image";
 import { RedactBlurTool } from "@/components/tools/image/redact-blur";
 import { ImageToTextTool } from "@/components/tools/image-to-text";
 import { ColorExtractorTool } from "@/components/tools/color-extractor";
+import { RemoveBgTool } from "@/components/tools/image/remove-bg";
+import { ImageUpscalerTool } from "@/components/tools/image/image-upscaler";
 
 import { XmlToCsvTool } from "@/components/tools/xml-to-csv";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -58,7 +61,7 @@ export default function Home() {
             Ultimate On-Device Utility Hub
           </div>
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
-            iLovePDF & iLoveIMG Suite
+            Tool Suite
           </h1>
           <p className="max-w-2xl mx-auto text-base text-zinc-400">
             Professional PDF editors, image manipulation utilities, and data converters powered by client-side WebAssembly & HTML5 Canvas.
@@ -96,7 +99,7 @@ export default function Home() {
                 className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-xl py-2.5 px-4 font-semibold text-sm transition-all flex items-center justify-center gap-2"
               >
                 <ImageIcon className="w-4 h-4" />
-                IMG Suite (6 Tools)
+                IMG Suite (8 Tools)
               </TabsTrigger>
               <TabsTrigger
                 value="data"
@@ -149,6 +152,8 @@ export default function Home() {
           <TabsContent value="image" className="space-y-6">
             <div className="flex flex-wrap gap-2 justify-center border-b border-zinc-800/80 pb-4">
               {[
+                { id: "remove-bg", label: "AI Remove BG", icon: <Sparkles className="w-4 h-4 text-emerald-400" /> },
+                { id: "upscale", label: "HD Upscaler (2x/4x)", icon: <Zap className="w-4 h-4 text-blue-400" /> },
                 { id: "compress", label: "Compress & Resize", icon: <Sliders className="w-4 h-4" /> },
                 { id: "crop", label: "Crop Image", icon: <Crop className="w-4 h-4" /> },
                 { id: "watermark-img", label: "Watermark Photo", icon: <Stamp className="w-4 h-4" /> },
@@ -171,6 +176,8 @@ export default function Home() {
             </div>
 
             <div className="animate-in fade-in duration-300">
+              {activeSubTabImg === "remove-bg" && <RemoveBgTool />}
+              {activeSubTabImg === "upscale" && <ImageUpscalerTool />}
               {activeSubTabImg === "compress" && <ImageResizerTool />}
               {activeSubTabImg === "crop" && <CropImageTool />}
               {activeSubTabImg === "watermark-img" && <WatermarkImageTool />}

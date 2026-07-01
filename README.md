@@ -1,6 +1,6 @@
-# Personal Utility Hub & On-Device Web Tools Suite (iLovePDF & iLoveIMG Suite)
+# Personal Tool Suite & On-Device Web Utilities
 
-A comprehensive suite of utilities for PDF editing, image manipulation, optical character recognition (OCR), color extraction, and data conversion. All tools are accessible via an interactive, vibrant **100% On-Device Next.js Web Application** and supported by **command-line Python scripts**.
+A comprehensive suite of utilities for PDF editing, image manipulation, background removal, upscaling, optical character recognition (OCR), color extraction, and data conversion. All tools are accessible via an interactive, vibrant **100% On-Device Next.js Web Application** and supported by **command-line Python scripts**.
 
 ---
 
@@ -8,15 +8,15 @@ A comprehensive suite of utilities for PDF editing, image manipulation, optical 
 
 When using the web interface (`web/`), **all operations are executed entirely on your device inside your browser sandbox.** 
 - PDF editing & merging uses `pdf-lib` and local canvas rendering (`pdfjs-dist`).
-- OCR uses WebAssembly Web Workers (`tesseract.js`).
-- Image masking, resizing, cropping, and redaction execute on local HTML5 Canvas.
+- AI Background Removal & OCR use WebAssembly ONNX workers (`@imgly/background-removal`, `tesseract.js`).
+- Image upscaling, masking, resizing, cropping, and redaction execute on local HTML5 Canvas.
 - **No files or data ever leave your device or get sent to any cloud server.**
 
 ---
 
-## 🧰 Available Tools Suite (15 Utilities)
+## 🧰 Available Tools Suite (17 Utilities)
 
-### 📂 PDF Suite (iLovePDF Equivalent)
+### 📂 PDF Suite
 | Tool Name | Web Interface | Description |
 | :--- | :--- | :--- |
 | **Merge PDF** | Built-in | Combine multiple PDF files into a single unified document with custom drag-and-drop page ordering. |
@@ -27,9 +27,11 @@ When using the web interface (`web/`), **all operations are executed entirely on
 | **JPG / PNG to PDF** | Built-in | Convert multiple JPG, PNG, or WEBP photos into a structured PDF album. |
 | **PDF to PNG Renderer** | Built-in | Render PDF pages into high-resolution PNG image files or download all pages as a ZIP archive. |
 
-### 🖼️ Image Suite (iLoveIMG Equivalent)
+### 🖼️ Image Suite
 | Tool Name | Web Interface | Description |
 | :--- | :--- | :--- |
+| **AI Remove Background** | Built-in | Isolates subjects and removes photo backgrounds locally inside your browser using WASM neural networks. |
+| **HD Image Upscaler** | Built-in | Increases image resolution up to 4x with multi-step crisp sharpening contrast filters. |
 | **Compress & Resize Image** | Built-in | Adjust exact pixel width/height, modify compression quality %, and convert between WEBP, PNG, and JPG. |
 | **Crop Image** | Built-in | Trim image edges with preset aspect ratios (`1:1 Square`, `16:9 Landscape`, `4:3 Standard`) or custom percentage sliders. |
 | **Watermark Photo** | Built-in | Overlay custom copyright branding or text watermarks onto photos before publishing. |

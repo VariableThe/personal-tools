@@ -11,6 +11,11 @@ const fontMono = Geist_Mono({
   variable: "--font-mono",
 })
 
+export const metadata = {
+  title: "Tool Suite | 100% On-Device Utilities",
+  description: "Professional PDF editors, image manipulation utilities, and data converters running locally on device.",
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
