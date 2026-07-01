@@ -1,55 +1,70 @@
-# Personal Python Tools
+# Personal Utility Hub & On-Device Web Tools
 
-A collection of utility tools built for everyday automation, image processing, and data conversion.
-
----
-
-## 🧰 Available Tools
-
-| Tool | Script | Description |
-| :--- | :--- | :--- |
-| **XML to CSV Converter** | `convert_xml_to_csv.py` | Converts structured XML files or Property List (`plist`) XML files into clean tabular CSV spreadsheets. |
-| **Image Color Extractor** | `extract_color.py` | Interactive GUI tool to select an image, pick a color, adjust tolerance, and export transparent RGBA cutouts. |
+A comprehensive suite of utilities for data conversion, image manipulation, optical character recognition (OCR), and PDF extraction. All tools are available as **command-line Python scripts** and accessible via an interactive **100% On-Device Next.js Web Application**.
 
 ---
 
-## 🚀 Setup & Installation
+## 🛡️ Privacy Guarantee: 100% On-Device Execution
 
-Ensure you have Python 3 installed. For GUI image tools (`extract_color.py`), install the required libraries:
+When using the web interface (`web/`), **all operations are executed entirely on your device inside your browser sandbox.** 
+- PDF rendering uses local canvas graphics (`pdfjs-dist`).
+- OCR uses WebAssembly Web Workers (`tesseract.js`).
+- Image masking and resizing execute on local HTML5 Canvas.
+- **No files or data ever leave your device or get sent to any server.**
 
+---
+
+## 🧰 Available Tools Suite
+
+| Tool Name | CLI Script | Web Interface | Description |
+| :--- | :--- | :--- | :--- |
+| **XML to CSV Converter** | `convert_xml_to_csv.py` | Built-in | Converts structured XML feeds or Apple Property List (`plist`) XML exports into clean CSV tables. |
+| **Color Extractor & Masker** | `extract_color.py` | Built-in | Interactive eyedropper & slider utility to isolate exact RGB colors and export transparent RGBA cutouts. |
+| **PDF to PNG Renderer** | `pdf_to_png.py` | Built-in | Renders multi-page PDF documents into high-resolution PNG files or bulk ZIP packages. |
+| **Image to Text (OCR)** | `image_to_text.py` | Built-in | Recognizes optical character text from screenshots or scanned image documents. |
+| **Image Resizer & Converter** | N/A | Built-in | Adjusts pixel dimensions, modifies compression quality, and converts between WEBP, PNG, and JPG. |
+
+---
+
+## 🌐 Launching the Web Interface
+
+The interactive website is built with Next.js & Shadcn UI in the `web/` directory.
+
+```bash
+cd web
+bun install
+bun run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser to access the interactive suite.
+
+---
+
+## 💻 Command-Line (CLI) Usage
+
+Make sure you have Python 3 installed along with dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
----
-
-## 📖 Tool Usage & Documentation
-
-### 1. XML to CSV Converter (`convert_xml_to_csv.py`)
-Parses XML structures (such as data catalogs, exported feeds, or plist structures) and flattens them into `.csv` files.
-
-**How to run:**
+### 1. XML to CSV Converter
 ```bash
 python3 convert_xml_to_csv.py path/to/input.xml -o ./output_folder/
 ```
-- **Arguments:**
-  - `input`: Path to your `.xml` file.
-  - `-o, --output-dir` *(optional)*: Directory to output generated `.csv` files.
 
----
-
-### 2. Image Color Extractor (`extract_color.py`)
-Provides an interactive GUI interface (`tkinter`) to isolate specific color ranges from an image and mask the rest to transparent.
-
-**How to run:**
+### 2. Image Color Extractor (Desktop GUI)
 ```bash
 python3 extract_color.py
 ```
-- **Workflow Steps:**
-  1. **Select Image**: Choose an image file (`PNG`, `JPG`, `WEBP`, etc.) from the popup dialog.
-  2. **Pick Color**: Use the visual color chooser to pick the exact RGB color you want to keep.
-  3. **Set Tolerance**: Enter a numeric distance (0–255) to specify how closely colors must match your selection (default: `30`).
-  4. **Save Cutout**: Choose where to save your transparent `.png` mask.
+
+### 3. PDF to PNG Converter
+```bash
+python3 pdf_to_png.py path/to/document.pdf --dpi 300
+```
+
+### 4. Image to Text OCR
+```bash
+python3 image_to_text.py path/to/scan.png -o output.txt
+```
 
 ---
 

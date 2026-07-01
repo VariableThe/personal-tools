@@ -7,7 +7,20 @@ __pycache__/
 # macOS
 .DS_Store
 
+# Next.js / Web
+web/.next/
+web/node_modules/
+web/out/
+web/build/
+web/.env*.local
+
 # User data & exports
 *.xml
 *.csv
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.txt
+*.zip
 !test_*.xml
