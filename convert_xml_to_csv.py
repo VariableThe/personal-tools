@@ -1,171 +1,116 @@
 #!/usr/bin/env python3
 """
-Apple Music / iTunes Library XML to CSV Converter
+General XML to CSV Converter
 
-Converts Apple Music or iTunes exported Library.xml files into clean, comprehensive CSV files:
-1. Library_Tracks.csv: Complete track catalog with all metadata attributes.
-2. Library_Playlists.csv: Playlists and their exact track order and details.
+Converts structured XML files (including standard XML data feeds, catalogs, or Property List XML files)
+into clean, tabular CSV files automatically.
 """
 
 import argparse
 import csv
 import plistlib
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-def convert_library(xml_path: Path, output_dir: Path) -> None:
-    if not xml_path.exists():
-        print(f"Error: XML file not found at '{xml_path}'", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"Loading '{xml_path}'...")
+def convert_plist_xml(xml_path: Path, output_dir: Path) -> bool:
+    """Try converting as an Apple/generic plist XML file containing dicts/lists of records."""
     try:
         with open(xml_path, "rb") as fp:
-            plist_data = plistlib.load(fp)
-    except Exception as e:
-        print(f"Error reading plist XML file: {e}", file=sys.stderr)
-        sys.exit(1)
+            data = plistlib.load(fp)
+    except Exception:
+        return False
 
-    tracks = plist_data.get("Tracks", {})
-    print(f"Found {len(tracks)} tracks.")
+    converted = False
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, dict) and all(isinstance(v, dict) for v in value.values()):
+                # e.g., Tracks dictionary
+                records = list(value.values())
+                export_records_to_csv(records, output_dir / f"{key}.csv")
+                converted = True
+            elif isinstance(value, list) and all(isinstance(v, dict) for v in value):
+                export_records_to_csv(value, output_dir / f"{key}.csv")
+                converted = True
+    elif isinstance(data, list) and all(isinstance(v, dict) for v in data):
+        export_records_to_csv(data, output_dir / f"{xml_path.stem}.csv")
+        converted = True
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    return converted
 
-    # Preferred column order for common metadata fields
-    preferred_order = [
-        "Track ID",
-        "Name",
-        "Artist",
-        "Album Artist",
-        "Composer",
-        "Album",
-        "Genre",
-        "Kind",
-        "Size",
-        "Total Time",
-        "Disc Number",
-        "Disc Count",
-        "Track Number",
-        "Track Count",
-        "Year",
-        "Bit Rate",
-        "Sample Rate",
-        "Date Added",
-        "Release Date",
-        "Play Count",
-        "Play Date UTC",
-        "Rating",
-        "Location",
-        "Persistent ID",
-        "Track Type",
-        "Apple Music",
-    ]
+
+def convert_standard_xml(xml_path: Path, output_dir: Path) -> None:
+    """Convert standard XML tree structure into CSV rows based on child elements."""
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+
+    # Find repeating child elements to treat as table rows
+    children = list(root)
+    if not children:
+        print("XML file contains no child elements to export.")
+        return
+
+    # Group children by tag
+    tag_groups = {}
+    for child in children:
+        tag_groups.setdefault(child.tag, []).append(child)
+
+    for tag, elements in tag_groups.items():
+        records = []
+        for el in elements:
+            row = dict(el.attrib)
+            for sub in el:
+                if len(sub) == 0:  # Leaf node
+                    row[sub.tag] = sub.text.strip() if sub.text else ""
+            records.append(row)
+
+        if records:
+            out_file = output_dir / f"{xml_path.stem}_{tag}.csv" if len(tag_groups) > 1 else output_dir / f"{xml_path.stem}.csv"
+            export_records_to_csv(records, out_file)
+
+
+def export_records_to_csv(records: list, out_file: Path) -> None:
+    if not records:
+        return
 
     all_keys = set()
-    for track in tracks.values():
-        all_keys.update(track.keys())
+    for r in records:
+        all_keys.update(r.keys())
 
-    remaining_keys = sorted(list(all_keys - set(preferred_order)))
-    fieldnames = [k for k in preferred_order if k in all_keys] + remaining_keys
+    fieldnames = sorted(list(all_keys))
+    out_file.parent.mkdir(parents=True, exist_ok=True)
 
-    tracks_csv_path = output_dir / "Library_Tracks.csv"
-    print(f"Writing tracks to '{tracks_csv_path}'...")
-    with open(tracks_csv_path, "w", newline="", encoding="utf-8") as out_f:
-        writer = csv.DictWriter(out_f, fieldnames=fieldnames)
+    print(f"Exporting {len(records)} rows -> {out_file}...")
+    with open(out_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        for track in tracks.values():
+        for r in records:
             row = {}
             for k in fieldnames:
-                val = track.get(k, "")
+                val = r.get(k, "")
                 if isinstance(val, bytes):
                     val = val.hex()
                 row[k] = val
             writer.writerow(row)
 
-    # Export Playlists
-    playlists = plist_data.get("Playlists", [])
-    if playlists:
-        playlists_csv_path = output_dir / "Library_Playlists.csv"
-        print(f"Found {len(playlists)} playlists. Writing to '{playlists_csv_path}'...")
-        with open(playlists_csv_path, "w", newline="", encoding="utf-8") as out_f:
-            p_fieldnames = [
-                "Playlist ID",
-                "Playlist Name",
-                "Playlist Description",
-                "Track Order",
-                "Track ID",
-                "Track Name",
-                "Track Artist",
-                "Track Album",
-            ]
-            writer = csv.DictWriter(out_f, fieldnames=p_fieldnames)
-            writer.writeheader()
-            for pl in playlists:
-                pl_id = pl.get("Playlist ID", "")
-                pl_name = pl.get("Name", "")
-                pl_desc = pl.get("Description", "")
-                items = pl.get("Playlist Items", [])
-                if not items:
-                    writer.writerow(
-                        {
-                            "Playlist ID": pl_id,
-                            "Playlist Name": pl_name,
-                            "Playlist Description": pl_desc,
-                            "Track Order": "",
-                            "Track ID": "",
-                            "Track Name": "",
-                            "Track Artist": "",
-                            "Track Album": "",
-                        }
-                    )
-                else:
-                    for idx, item in enumerate(items, 1):
-                        t_id = str(item.get("Track ID", ""))
-                        t_info = (
-                            tracks.get(t_id, tracks.get(int(t_id), {}))
-                            if t_id.isdigit()
-                            else {}
-                        )
-                        writer.writerow(
-                            {
-                                "Playlist ID": pl_id,
-                                "Playlist Name": pl_name,
-                                "Playlist Description": pl_desc,
-                                "Track Order": idx,
-                                "Track ID": t_id,
-                                "Track Name": t_info.get("Name", ""),
-                                "Track Artist": t_info.get("Artist", ""),
-                                "Track Album": t_info.get("Album", ""),
-                            }
-                        )
-
-    print("Conversion completed successfully!")
-
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Convert Apple Music / iTunes Library.xml to CSV files."
-    )
-    parser.add_argument(
-        "input",
-        type=Path,
-        nargs="?",
-        default=Path("Library.xml"),
-        help="Path to the Apple Music/iTunes Library.xml file (default: ./Library.xml)",
-    )
-    parser.add_argument(
-        "-o",
-        "--output-dir",
-        type=Path,
-        default=None,
-        help="Directory to save output CSV files (default: same directory as input XML)",
-    )
+    parser = argparse.ArgumentParser(description="Convert structured XML files to CSV format.")
+    parser.add_argument("input", type=Path, help="Path to the XML file to convert")
+    parser.add_argument("-o", "--output-dir", type=Path, default=None, help="Directory to save output CSV files")
 
     args = parser.parse_args()
+    if not args.input.exists():
+        print(f"Error: Input file '{args.input}' not found.", file=sys.stderr)
+        sys.exit(1)
+
     output_dir = args.output_dir if args.output_dir else args.input.parent
 
-    convert_library(args.input, output_dir)
+    # Try plist format first, fallback to standard ElementTree XML parsing
+    if not convert_plist_xml(args.input, output_dir):
+        convert_standard_xml(args.input, output_dir)
+    print("Conversion completed!")
 
 
 if __name__ == "__main__":

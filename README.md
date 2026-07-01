@@ -1,41 +1,58 @@
-# Apple Music & iTunes Library XML to CSV Converter
+# Personal Python Tools
 
-A lightning-fast, zero-dependency Python tool to convert Apple Music or iTunes `Library.xml` exports into comprehensive, clean CSV spreadsheets.
+A collection of utility tools built for everyday automation, image processing, and data conversion.
 
-## ✨ Features
+---
 
-- **Zero Dependencies**: Uses only Python 3 built-in libraries (`plistlib`, `csv`, `argparse`, `pathlib`).
-- **Complete Track Export**: Extracts all available song attributes (Track ID, Name, Artist, Album, Genre, Bit Rate, Sample Rate, Play Count, Release Date, Location, etc.) and saves them to `Library_Tracks.csv`.
-- **Playlist Preservation**: Exports all playlists along with track ordering and item details to `Library_Playlists.csv`.
-- **Intelligent Column Sorting**: Places common metadata columns first while preserving all extra custom properties found across your library.
+## 🧰 Available Tools
 
-## 🚀 Usage
+| Tool | Script | Description |
+| :--- | :--- | :--- |
+| **XML to CSV Converter** | `convert_xml_to_csv.py` | Converts structured XML files or Property List (`plist`) XML files into clean tabular CSV spreadsheets. |
+| **Image Color Extractor** | `extract_color.py` | Interactive GUI tool to select an image, pick a color, adjust tolerance, and export transparent RGBA cutouts. |
 
-### 1. Export your Library from Apple Music / iTunes
-1. Open **Apple Music** (macOS) or **iTunes** (Windows).
-2. Go to `File` > `Library` > `Export Library...`.
-3. Save the file as `Library.xml`.
+---
 
-### 2. Run the Converter
-Run the script directly from your terminal:
+## 🚀 Setup & Installation
+
+Ensure you have Python 3 installed. For GUI image tools (`extract_color.py`), install the required libraries:
 
 ```bash
-python3 convert_xml_to_csv.py path/to/Library.xml
+pip install -r requirements.txt
 ```
 
-You can optionally specify an output directory using the `-o` flag:
+---
 
+## 📖 Tool Usage & Documentation
+
+### 1. XML to CSV Converter (`convert_xml_to_csv.py`)
+Parses XML structures (such as data catalogs, exported feeds, or plist structures) and flattens them into `.csv` files.
+
+**How to run:**
 ```bash
-python3 convert_xml_to_csv.py Library.xml -o ./output_csvs/
+python3 convert_xml_to_csv.py path/to/input.xml -o ./output_folder/
 ```
+- **Arguments:**
+  - `input`: Path to your `.xml` file.
+  - `-o, --output-dir` *(optional)*: Directory to output generated `.csv` files.
 
-## 📊 Output Files
+---
 
-When finished, the converter generates two CSV files in your target folder:
+### 2. Image Color Extractor (`extract_color.py`)
+Provides an interactive GUI interface (`tkinter`) to isolate specific color ranges from an image and mask the rest to transparent.
 
-1. **`Library_Tracks.csv`**: Contains every track in your library.
-2. **`Library_Playlists.csv`**: Contains every playlist, ordered by track sequence.
+**How to run:**
+```bash
+python3 extract_color.py
+```
+- **Workflow Steps:**
+  1. **Select Image**: Choose an image file (`PNG`, `JPG`, `WEBP`, etc.) from the popup dialog.
+  2. **Pick Color**: Use the visual color chooser to pick the exact RGB color you want to keep.
+  3. **Set Tolerance**: Enter a numeric distance (0–255) to specify how closely colors must match your selection (default: `30`).
+  4. **Save Cutout**: Choose where to save your transparent `.png` mask.
+
+---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](file:///Users/aditya/downloads/apple-music-xml-to-csv/LICENSE) file for details.
+MIT License.
