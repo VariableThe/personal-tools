@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Upload, FileText, Copy, Check, RefreshCw, Eye } from "lucide-react";
+import { Upload, Copy, Check, RefreshCw, FileImage } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export function ImageToTextTool() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -74,94 +77,110 @@ export function ImageToTextTool() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-900/40 text-center">
-        <input
-          type="file"
-          accept="image/*"
-          id="ocr-upload"
-          className="hidden"
-          onChange={handleFileUpload}
-        />
-        <label
-          htmlFor="ocr-upload"
-          className="cursor-pointer flex flex-col items-center justify-center space-y-3"
-        >
-          <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-            <Upload className="w-7 h-7" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-zinc-100">
-              Select an Image containing Text
-            </h3>
-            <p className="text-sm text-zinc-400 mt-1">
-              Runs Tesseract WebAssembly optical character recognition completely on device.
-            </p>
-          </div>
-          <span className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl shadow-lg shadow-blue-600/20 transition-all">
-            Upload Image for OCR
-          </span>
-        </label>
-      </div>
-
-      {loading && (
-        <div className="p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-3 text-center">
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mx-auto" />
-          <p className="text-sm font-medium text-zinc-200 capitalize">{statusText}</p>
-          <div className="w-full bg-zinc-800 rounded-full h-2 max-w-md mx-auto overflow-hidden">
-            <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <span className="text-xs text-zinc-400">{progress}%</span>
+    <Card className="border-zinc-800 bg-zinc-900/60 shadow-xl">
+      <CardHeader className="space-y-1">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-xl font-bold flex items-center gap-2">
+            <FileImage className="w-5 h-5 text-blue-400" />
+            Image to Text (OCR)
+          </CardTitle>
+          <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10">
+            100% On-Device WASM
+          </Badge>
         </div>
-      )}
+        <CardDescription className="text-zinc-400">
+          Extract optical character text from screenshots or scanned image documents.
+        </CardDescription>
+      </CardHeader>
 
-      {imageSrc && !loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 block">
-              Source Image
-            </span>
-            <div className="border border-zinc-800 rounded-2xl p-4 bg-zinc-950/60 flex items-center justify-center min-h-[300px]">
-              <img src={imageSrc} alt="Source for OCR" className="max-h-80 object-contain rounded-lg shadow" />
+      <CardContent className="space-y-6">
+        <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-950/40 text-center">
+          <input
+            type="file"
+            accept="image/*"
+            id="ocr-upload"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <label
+            htmlFor="ocr-upload"
+            className="cursor-pointer flex flex-col items-center justify-center space-y-3"
+          >
+            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+              <Upload className="w-6 h-6" />
             </div>
-          </div>
+            <div>
+              <p className="text-base font-semibold text-zinc-200">Select an Image containing Text</p>
+              <p className="text-xs text-zinc-400 mt-1">Runs Tesseract WebAssembly engine locally.</p>
+            </div>
+            <Button variant="default" className="bg-blue-600 hover:bg-blue-500 pointer-events-none">
+              Upload Image for OCR
+            </Button>
+          </label>
+        </div>
 
-          <div className="space-y-2 flex flex-col">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Extracted Text Output
+        {loading && (
+          <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-3 text-center">
+            <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mx-auto" />
+            <p className="text-sm font-medium text-zinc-200 capitalize">{statusText}</p>
+            <div className="w-full bg-zinc-900 rounded-full h-2 max-w-md mx-auto overflow-hidden">
+              <div
+                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="text-xs text-zinc-400">{progress}%</span>
+          </div>
+        )}
+
+        {imageSrc && !loading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 block">
+                Source Image
               </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={copyToClipboard}
-                  disabled={!text}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-medium transition-all"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? "Copied" : "Copy"}
-                </button>
-                <button
-                  onClick={downloadTxt}
-                  disabled={!text}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium shadow transition-all"
-                >
-                  Download .TXT
-                </button>
+              <div className="border border-zinc-800 rounded-2xl p-4 bg-zinc-950 flex items-center justify-center min-h-[300px]">
+                <img src={imageSrc} alt="Source for OCR" className="max-h-80 object-contain rounded-lg shadow" />
               </div>
             </div>
 
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Extracted text will appear here..."
-              className="w-full flex-grow p-4 bg-zinc-950 border border-zinc-800 rounded-2xl font-mono text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[300px]"
-            />
+            <div className="space-y-2 flex flex-col">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                  Extracted Text Output
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={copyToClipboard}
+                    disabled={!text}
+                    className="h-7 text-xs border-zinc-800 text-zinc-200"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+                    {copied ? "Copied" : "Copy"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={downloadTxt}
+                    disabled={!text}
+                    className="h-7 text-xs bg-blue-600 hover:bg-blue-500 text-white"
+                  >
+                    Download .TXT
+                  </Button>
+                </div>
+              </div>
+
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Extracted text will appear here..."
+                className="w-full flex-grow p-4 bg-zinc-950 border border-zinc-800 rounded-2xl font-mono text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[300px]"
+              />
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
