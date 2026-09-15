@@ -1,19 +1,16 @@
-import { Geist, Geist_Mono, Inter } from "next/font/google"
+import { Geist_Mono } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'})
-
-const fontMono = Geist_Mono({
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
-  variable: "--font-mono",
 })
 
 export const metadata = {
-  title: "Tool Suite | 100% On-Device Utilities",
-  description: "Professional PDF editors, image manipulation utilities, and data converters running locally on device.",
+  title: "Tool Suite — vrbl.win",
+  description: "Professional PDF, image & data utilities. 100% on-device, square, red.",
 }
 
 export default function RootLayout({
@@ -22,13 +19,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
-    >
-      <body>
-        <ThemeProvider>{children}</ThemeProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${geistMono.variable} font-mono antialiased`}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   )
