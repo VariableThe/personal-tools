@@ -126,6 +126,11 @@ export function NotebookLmToPdfTool() {
   const [margins, setMargins] = useState<MarginId>("normal");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const paperRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<HTMLElement>(null);
+
+  // Paper width in px (96 CSS px per inch) for the chosen page geometry.
+  const paperPx = Math.round(contentWidthMm(pageSize, orientation, margins) * (96 / 25.4));
 
   const normalized = useMemo(() => normalizeNotebookLmMarkdown(source), [source]);
   const rendered = useMemo(
@@ -142,29 +147,40 @@ export function NotebookLmToPdfTool() {
 
   const hasContent = source.trim().length > 0;
 
-  // Shrink wide tables/equations/code to fit the preview width (no DOM
-  // state involved — pure measurement, so no render loops). Re-runs on
-  // content change, window resize, and late webfont loads (KaTeX fonts
-  // change measured widths after first paint).
+  // True-scale paper preview: the sheet is laid out at the real text
+  // width of the chosen page geometry, then zoomed (layout-affecting,
+  // unlike transform) to fit the pane. fit-to-width runs at true width
+  // first, so shrink amounts match the PDF. Direct style mutation only —
+  // no render state involved. Re-runs on content, geometry, resize, and
+  // late webfont loads (KaTeX fonts change measured widths).
   useEffect(() => {
-    const node = previewRef.current;
-    if (!node || !rendered.html) return;
-    const refit = () => {
-      if (previewRef.current) fitNotebookLmContent(previewRef.current);
+    const viewport = previewRef.current;
+    const paper = paperRef.current;
+    const article = articleRef.current;
+    if (!viewport || !paper || !article || !rendered.html) return;
+    const update = () => {
+      paper.style.zoom = "1";
+      fitNotebookLmContent(article);
+      const avail = viewport.clientWidth - 32;
+      const scale = avail > 0 ? Math.min(1, avail / paperPx) : 1;
+      paper.style.zoom = String(scale);
     };
-    refit();
-    window.addEventListener("resize", refit);
+    update();
+    window.addEventListener("resize", update);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    ro?.observe(viewport);
     let cancelled = false;
     if (document.fonts?.ready) {
       document.fonts.ready.then(() => {
-        if (!cancelled) refit();
+        if (!cancelled) update();
       });
     }
     return () => {
       cancelled = true;
-      window.removeEventListener("resize", refit);
+      window.removeEventListener("resize", update);
+      ro?.disconnect();
     };
-  }, [rendered.html]);
+  }, [rendered.html, paperPx]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -468,16 +484,23 @@ ${clonedStyles}
             </div>
             <div
               ref={previewRef}
-              className="border border-border bg-white min-h-[320px] xl:min-h-[480px] max-h-[640px] overflow-y-auto p-5 sm:p-8"
-              title="Wide tables and equations auto-shrink to fit the page width"
+              className="border border-border bg-muted/60 min-h-[320px] xl:min-h-[480px] max-h-[640px] overflow-auto p-4"
+              title="Preview paper matches the chosen page size, orientation and margins"
             >
               {rendered.html ? (
-                <article
-                  className="nlm-doc"
-                  dangerouslySetInnerHTML={{ __html: rendered.html }}
-                />
+                <div
+                  ref={paperRef}
+                  className="bg-white shadow-md mx-auto"
+                  style={{ width: `${paperPx}px` }}
+                >
+                  <article
+                    ref={articleRef}
+                    className="nlm-doc p-6 sm:p-8"
+                    dangerouslySetInnerHTML={{ __html: rendered.html }}
+                  />
+                </div>
               ) : (
-                <div className="h-full min-h-[280px] flex flex-col items-center justify-center text-center gap-2 text-neutral-400">
+                <div className="h-full min-h-[280px] flex flex-col items-center justify-center text-center gap-2 text-muted-foreground">
                   <FileText className="w-8 h-8" />
                   <p className="text-sm font-mono">
                     Paste Markdown on the left to see the formatted document here.
