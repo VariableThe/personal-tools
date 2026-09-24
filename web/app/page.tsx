@@ -14,6 +14,7 @@ import {
   Crop,
   EyeOff,
   FileText,
+  BookOpenText,
   Pipette,
   Code,
   FolderKanban,
@@ -29,6 +30,7 @@ import { WatermarkPdfTool } from "@/components/tools/pdf/watermark-pdf";
 import { PageNumbersPdfTool } from "@/components/tools/pdf/page-numbers-pdf";
 import { ImagesToPdfTool } from "@/components/tools/pdf/images-to-pdf";
 import { PdfToPngTool } from "@/components/tools/pdf-to-png";
+import { NotebookLmToPdfTool } from "@/components/tools/notebooklm-to-pdf";
 
 import { ImageResizerTool } from "@/components/tools/image-resizer";
 import { CropImageTool } from "@/components/tools/image/crop-image";
@@ -95,7 +97,7 @@ export default function Home() {
                 className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2"
               >
                 <FolderKanban className="w-4 h-4" />
-                PDF (7)
+                PDF (8)
               </TabsTrigger>
               <TabsTrigger
                 value="image"
@@ -131,6 +133,7 @@ export default function Home() {
                 { id: "numbers", label: "Page Numbers", icon: <Hash className="w-4 h-4" /> },
                 { id: "img-to-pdf", label: "JPG to PDF", icon: <FileImage className="w-4 h-4" /> },
                 { id: "pdf-to-png", label: "PDF to PNG", icon: <ImageIcon className="w-4 h-4" /> },
+                { id: "notebooklm", label: "Notes to PDF", icon: <BookOpenText className="w-4 h-4" /> },
               ].map((sub) => (
                 <button key={sub.id} onClick={() => setActiveSubTabPdf(sub.id)} className={subBtn(activeSubTabPdf === sub.id)}>
                   {sub.icon} {sub.label}
@@ -145,6 +148,7 @@ export default function Home() {
               {activeSubTabPdf === "numbers" && <PageNumbersPdfTool />}
               {activeSubTabPdf === "img-to-pdf" && <ImagesToPdfTool />}
               {activeSubTabPdf === "pdf-to-png" && <PdfToPngTool />}
+              {activeSubTabPdf === "notebooklm" && <NotebookLmToPdfTool />}
             </div>
           </TabsContent>
 
@@ -207,7 +211,7 @@ export default function Home() {
         </Tabs>
 
         <footer className="text-center pt-8 border-t border-border font-mono text-xs text-muted-foreground space-y-3">
-          <p className="uppercase tracking-wide">16 tools · all local · vrbl.win design system · square · red · mono</p>
+          <p className="uppercase tracking-wide">17 tools · all local · vrbl.win design system · square · red · mono</p>
           <div className="flex items-center justify-center gap-4">
             <a
               href="https://github.com/VariableThe/personal-tools"
