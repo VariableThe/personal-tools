@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   BookOpenText,
   Upload,
@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { normalizeNotebookLmMarkdown } from "@/lib/notebooklm-latex";
 import { renderNotebookLmHtml } from "@/lib/notebooklm-render";
+import { fitNotebookLmContent } from "@/lib/notebooklm-fit";
 import {
   NOTEBOOKLM_PROMPT_TITLE,
   NOTEBOOKLM_PROMPT_HINT,
@@ -46,6 +47,7 @@ const NLM_DOC_CSS = `
 .nlm-doc th, .nlm-doc td { border: 1px solid #555; padding: 6px 8px; text-align: left; vertical-align: top; }
 .nlm-doc th { background: #eee; font-weight: 700; }
 .nlm-doc tr:nth-child(even) td { background: #fafafa; }
+.nlm-doc td, .nlm-doc th { overflow-wrap: anywhere; word-break: break-word; }
 .nlm-doc code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; background: #f0f0f0; padding: 1px 5px; border: 1px solid #ddd; }
 .nlm-doc pre { background: #f5f5f5; border: 1px solid #ccc; padding: 12px; overflow-x: auto; font-size: 9.5pt; line-height: 1.5; }
 .nlm-doc pre code { background: none; border: none; padding: 0; }
@@ -104,6 +106,7 @@ export function NotebookLmToPdfTool() {
   const [promptCopied, setPromptCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   const normalized = useMemo(() => normalizeNotebookLmMarkdown(source), [source]);
   const rendered = useMemo(
@@ -119,6 +122,30 @@ export function NotebookLmToPdfTool() {
   const headingCount = useMemo(() => (source.match(/^#{1,6}\s+\S/gm) || []).length, [source]);
 
   const hasContent = source.trim().length > 0;
+
+  // Shrink wide tables/equations/code to fit the preview width (no DOM
+  // state involved — pure measurement, so no render loops). Re-runs on
+  // content change, window resize, and late webfont loads (KaTeX fonts
+  // change measured widths after first paint).
+  useEffect(() => {
+    const node = previewRef.current;
+    if (!node || !rendered.html) return;
+    const refit = () => {
+      if (previewRef.current) fitNotebookLmContent(previewRef.current);
+    };
+    refit();
+    window.addEventListener("resize", refit);
+    let cancelled = false;
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (!cancelled) refit();
+      });
+    }
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", refit);
+    };
+  }, [rendered.html]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -228,15 +255,36 @@ ${clonedStyles}
       const win = iframe.contentWindow;
       if (!win) throw new Error("Could not open the print document.");
       win.focus();
-      // Let KaTeX fonts/layout settle before printing.
-      setTimeout(() => {
+      // Let KaTeX fonts/layout settle, then shrink any content wider
+      // than the A4 text block so nothing is clipped in the PDF.
+      const finish = () => {
+        try {
+          const article = doc.querySelector(".nlm-doc") as HTMLElement | null;
+          if (article) fitNotebookLmContent(article);
+        } catch {
+          // Fitting is best-effort; print anyway.
+        }
         win.print();
         setTimeout(() => {
           document.body.removeChild(iframe);
           document.title = prevTitle;
           setExporting(false);
         }, 500);
-      }, 250);
+      };
+      let done = false;
+      const once = () => {
+        if (!done) {
+          done = true;
+          finish();
+        }
+      };
+      try {
+        const fontsReady = (doc as Document).fonts?.ready;
+        if (fontsReady) fontsReady.then(once);
+      } catch {
+        // fall through to timeout
+      }
+      setTimeout(once, 400);
     } catch (err) {
       setExporting(false);
       alert(`PDF export failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -348,7 +396,11 @@ ${clonedStyles}
                 </Button>
               </div>
             </div>
-            <div className="border border-border bg-white min-h-[320px] xl:min-h-[480px] max-h-[640px] overflow-y-auto p-5 sm:p-8">
+            <div
+              ref={previewRef}
+              className="border border-border bg-white min-h-[320px] xl:min-h-[480px] max-h-[640px] overflow-y-auto p-5 sm:p-8"
+              title="Wide tables and equations auto-shrink to fit the page width"
+            >
               {rendered.html ? (
                 <article
                   className="nlm-doc"
