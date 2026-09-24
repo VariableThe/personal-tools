@@ -66,121 +66,6 @@ const GREEK_NAMES = [
   "Omega",
 ];
 
-const LATEX_COMMANDS = new Set([
-  "frac",
-  "sqrt",
-  "sum",
-  "prod",
-  "int",
-  "lim",
-  "log",
-  "ln",
-  "sin",
-  "cos",
-  "tan",
-  "sec",
-  "csc",
-  "cot",
-  "exp",
-  "det",
-  "dim",
-  "ker",
-  "deg",
-  "arg",
-  "gcd",
-  "sup",
-  "inf",
-  "max",
-  "min",
-  "left",
-  "right",
-  "middle",
-  "begin",
-  "end",
-  "text",
-  "mathrm",
-  "mathbf",
-  "mathit",
-  "mathcal",
-  "mathbb",
-  "mathsf",
-  "boldsymbol",
-  "overline",
-  "underline",
-  "hat",
-  "bar",
-  "vec",
-  "dot",
-  "ddot",
-  "tilde",
-  "binom",
-  "times",
-  "div",
-  "cdot",
-  "pm",
-  "mp",
-  "leq",
-  "geq",
-  "neq",
-  "approx",
-  "equiv",
-  "sim",
-  "simeq",
-  "cong",
-  "propto",
-  "in",
-  "notin",
-  "subset",
-  "subseteq",
-  "supset",
-  "supseteq",
-  "cup",
-  "cap",
-  "setminus",
-  "emptyset",
-  "varnothing",
-  "forall",
-  "exists",
-  "partial",
-  "nabla",
-  "infty",
-  "ldots",
-  "cdots",
-  "vdots",
-  "ddots",
-  "to",
-  "rightarrow",
-  "leftarrow",
-  "Rightarrow",
-  "Leftarrow",
-  "mapsto",
-  "langle",
-  "rangle",
-  "lceil",
-  "rceil",
-  "lfloor",
-  "rfloor",
-  "quad",
-  "qquad",
-  "hspace",
-  "vspace",
-  "hline",
-  "cases",
-  "aligned",
-  "align",
-  "gather",
-  "matrix",
-  "pmatrix",
-  "bmatrix",
-  "vmatrix",
-  "Vmatrix",
-  "array",
-  "label",
-  "tag",
-  "nonumber",
-  ...GREEK_NAMES,
-]);
-
 function extractCodeSegments(input: string): { text: string; blocks: string[] } {
   const blocks: string[] = [];
   // Fenced blocks first (``` or ~~~), then inline `code`.
@@ -293,7 +178,11 @@ function repairMathSegment(tex: string, warnings: string[], seen: Set<string>): 
   return out;
 }
 
-/** Check braces balance and unknown commands; returns error strings. */
+/** Check braces balance and \begin/\end pairing; returns error strings.
+ * Unknown-command detection is deliberately NOT done here: the render
+ * step trial-renders every equation with real KaTeX (throwOnError) and
+ * reports genuine failures, while any hand-maintained allowlist
+ * (e.g. missing \ge, \implies, \operatorname) produces false positives. */
 function validateMathSegment(tex: string, index: number, display: boolean): string[] {
   const errs: string[] = [];
   const label = display ? `display equation #${index + 1}` : `inline equation #${index + 1}`;
@@ -305,15 +194,6 @@ function validateMathSegment(tex: string, index: number, display: boolean): stri
   }
   if (depth !== 0) {
     errs.push(`Unbalanced braces in ${label}: "${truncate(tex, 60)}". Check { and } pairs.`);
-  }
-  const cmds = Array.from(tex.matchAll(/\\([A-Za-z]+)/g)).map((m) => m[1]);
-  const unknown = [...new Set(cmds.filter((c) => !LATEX_COMMANDS.has(c)))];
-  if (unknown.length > 0) {
-    errs.push(
-      `Unknown LaTeX ${unknown.length === 1 ? "command" : "commands"} in ${label}: ${unknown
-        .map((c) => `\\${c}`)
-        .join(", ")}. It will render as red error text in the preview.`
-    );
   }
   // \begin without \end
   const begins = (tex.match(/\\begin\{/g) || []).length;
@@ -352,8 +232,21 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
   const { text: noCode, blocks } = extractCodeSegments(text);
 
   // 3. Normalize math delimiters: \[...\] -> $$...$$, \(...\) -> $...$.
+  // NOTE: NotebookLM output frequently arrives with DOUBLED backslashes
+  // (\\( ... \\) and \\[ ... \\]) from chat-UI escaping. Those MUST be
+  // handled before the single-backslash forms — otherwise the inner regex
+  // matches the second backslash and leaves a stray "\" inside the math,
+  // which makes KaTeX fail on hundreds of equations at once.
+  // ("\\" line-breaks inside matrices are untouched: they are never
+  // directly followed by "(" or "[" in valid LaTeX.)
   let work = noCode;
 
+  work = work.replace(/\\\\\[([\s\S]*?)\\\\\]/g, (_, inner) => {
+    return `\n\n$$${inner}$$\n\n`;
+  });
+  work = work.replace(/\\\\\(([\s\S]*?)\\\\\)/g, (_, inner) => {
+    return `$${inner}$`;
+  });
   work = work.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => {
     return `\n\n$$${inner}$$\n\n`;
   });
@@ -370,17 +263,18 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
   });
 
   // 5. Extract inline math ($...$), repair inside.
+  // An escaped "\$" is a literal dollar, never a delimiter.
   const inlineSegs: string[] = [];
   // Avoid matching $$ remnants or $ prices: require non-space adjacency on open.
-  work = work.replace(/(?<!\$)\$(?!\$|\s)([^$\n]*?)(?<!\s)\$(?!\$|\d)/g, (m, inner) => {
+  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)([^$\n]*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (m, inner) => {
     const repaired = repairMathSegment(inner, warnings, repairs);
     inlineSegs.push(repaired);
     return `${MATH_PH}I${inlineSegs.length - 1}@`;
   });
 
-  // 6. Count dangling delimiters.
-  const leftoverDisplay = (work.match(/\$\$/g) || []).length;
-  const leftoverSingle = (work.match(/(?<!\$)\$(?!\$)/g) || []).length;
+  // 6. Count dangling delimiters (ignoring escaped "\$" literals).
+  const leftoverDisplay = (work.match(/(?<!\\)\$\$/g) || []).length;
+  const leftoverSingle = (work.match(/(?<!\$)(?<!\\)\$(?!\$)/g) || []).length;
   const restoredDisplayPlaceholders = displaySegs.length;
   const restoredInlinePlaceholders = inlineSegs.length;
   if (leftoverDisplay > 0) {

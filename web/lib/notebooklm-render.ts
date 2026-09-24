@@ -27,9 +27,9 @@ export function renderNotebookLmHtml(normalizedMarkdown: string): RenderResult {
     return `\n\n${DISP_PH}${displaySegs.length - 1}@\n\n`;
   });
 
-  // 2. Pull inline math out.
+  // 2. Pull inline math out ("\$" is a literal dollar, never a delimiter).
   const inlineSegs: string[] = [];
-  work = work.replace(/(?<!\$)\$(?!\$|\s)([^$\n]*?)(?<!\s)\$(?!\$|\d)/g, (_, inner) => {
+  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)([^$\n]*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (_, inner) => {
     inlineSegs.push(String(inner));
     return `${INL_PH}${inlineSegs.length - 1}@`;
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   BookOpenText,
   Upload,
@@ -95,12 +95,15 @@ export function NotebookLmToPdfTool() {
   const [source, setSource] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [docTitle, setDocTitle] = useState("Study Notes");
-  const [mounted, setMounted] = useState(false);
+  // Preview renders client-side only (DOMPurify needs window; avoids SSR/client mismatch).
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const [promptCopied, setPromptCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  React.useEffect(() => setMounted(true), []);
 
   const normalized = useMemo(() => normalizeNotebookLmMarkdown(source), [source]);
   const rendered = useMemo(
