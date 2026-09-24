@@ -27,6 +27,23 @@ import { normalizeNotebookLmMarkdown } from "@/lib/notebooklm-latex";
 import { renderNotebookLmHtml } from "@/lib/notebooklm-render";
 import { fitNotebookLmContent } from "@/lib/notebooklm-fit";
 import {
+  PAGE_SIZES,
+  ORIENTATIONS,
+  MARGIN_PRESETS,
+  buildPageCss,
+  contentWidthMm,
+  type PageSizeId,
+  type OrientationId,
+  type MarginId,
+} from "@/lib/notebooklm-page";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   NOTEBOOKLM_PROMPT_TITLE,
   NOTEBOOKLM_PROMPT_HINT,
   NOTEBOOKLM_PROMPT_TEMPLATE,
@@ -61,9 +78,8 @@ const NLM_DOC_CSS = `
 .nlm-doc .nlm-render-error { background: #fde8e8; border: 1px solid #e11d48; color: #9f1239; padding: 8px; }
 `;
 
-/** Extra rules applied only when printing (page geometry, break control). */
+/** Extra rules applied only when printing (break control; page geometry is injected per settings). */
 const NLM_PRINT_CSS = `
-@page { size: A4; margin: 18mm 15mm 18mm 15mm; }
 body { background: #fff !important; }
 .nlm-print-title { font-family: Georgia, 'Times New Roman', serif; font-size: 22pt; font-weight: 800; margin: 0 0 4px; color: #111; }
 .nlm-print-meta { font-family: Georgia, serif; font-size: 9pt; color: #555; margin: 0 0 14px; border-bottom: 2px solid #111; padding-bottom: 8px; }
@@ -105,6 +121,9 @@ export function NotebookLmToPdfTool() {
   );
   const [promptCopied, setPromptCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [pageSize, setPageSize] = useState<PageSizeId>("A4");
+  const [orientation, setOrientation] = useState<OrientationId>("portrait");
+  const [margins, setMargins] = useState<MarginId>("normal");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -239,7 +258,7 @@ export function NotebookLmToPdfTool() {
 <meta charset="utf-8" />
 <title>${escapeHtmlAttr(pdfName)}</title>
 ${clonedStyles}
-<style>${NLM_DOC_CSS}\n${NLM_PRINT_CSS}</style>
+<style>${NLM_DOC_CSS}\n${buildPageCss(pageSize, orientation, margins)}\n${NLM_PRINT_CSS}</style>
 </head>
 <body>
 <h1 class="nlm-print-title">${escapeHtml(docTitle)}</h1>
@@ -395,6 +414,57 @@ ${clonedStyles}
                   {exporting ? "Preparing…" : "Export PDF"}
                 </Button>
               </div>
+            </div>
+            <div className="flex items-end gap-2 flex-wrap border border-border bg-muted/40 p-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-widest">Page size</Label>
+                <Select value={pageSize} onValueChange={(v) => setPageSize(v as PageSizeId)}>
+                  <SelectTrigger size="sm" className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PAGE_SIZES).map(([id, s]) => (
+                      <SelectItem key={id} value={id}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-widest">Orientation</Label>
+                <Select value={orientation} onValueChange={(v) => setOrientation(v as OrientationId)}>
+                  <SelectTrigger size="sm" className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ORIENTATIONS).map(([id, o]) => (
+                      <SelectItem key={id} value={id}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-widest">Margins</Label>
+                <Select value={margins} onValueChange={(v) => setMargins(v as MarginId)}>
+                  <SelectTrigger size="sm" className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(MARGIN_PRESETS).map(([id, m]) => (
+                      <SelectItem key={id} value={id}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[11px] text-muted-foreground font-mono pb-1.5 ml-auto">
+                {contentWidthMm(pageSize, orientation, margins).toFixed(0)} mm text width
+                {orientation === "landscape" ? " · best for wide tables" : ""}
+              </p>
             </div>
             <div
               ref={previewRef}
