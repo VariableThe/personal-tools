@@ -1,7 +1,21 @@
 "use client";
 
 import React, { useState } from "react";
-import { Upload, FileText, Download, Trash2, ArrowUp, ArrowDown, Layers, CheckCircle2 } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Download,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Layers,
+  CheckCircle2,
+  ArrowDownAZ,
+  ArrowDownZA,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  GripVertical,
+} from "lucide-react";
 import { PDFDocument } from "pdf-lib";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,13 +27,30 @@ interface PdfFileItem {
   file: File;
   name: string;
   size: number;
+  pageCount: number | null;
 }
+
+type SortMode = "name-asc" | "name-desc" | "size-asc" | "size-desc";
 
 export function MergePdfTool() {
   const [files, setFiles] = useState<PdfFileItem[]>([]);
   const [mergedUrl, setMergedUrl] = useState<string | null>(null);
+  const [mergedInfo, setMergedInfo] = useState<{ pages: number; size: number } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const loadPageCount = async (id: string, file: File) => {
+    try {
+      const buffer = await file.arrayBuffer();
+      const doc = await PDFDocument.load(buffer);
+      const count = doc.getPageCount();
+      setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, pageCount: count } : f)));
+    } catch {
+      setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, pageCount: null } : f)));
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploaded = e.target.files;
@@ -30,15 +61,20 @@ export function MergePdfTool() {
       file,
       name: file.name,
       size: file.size,
+      pageCount: null,
     }));
 
     setFiles((prev) => [...prev, ...newItems]);
     setMergedUrl(null);
+    setMergedInfo(null);
+    newItems.forEach((item) => loadPageCount(item.id, item.file));
+    e.target.value = "";
   };
 
   const removeFile = (id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
     setMergedUrl(null);
+    setMergedInfo(null);
   };
 
   const moveUp = (idx: number) => {
@@ -49,6 +85,7 @@ export function MergePdfTool() {
     copy[idx] = temp;
     setFiles(copy);
     setMergedUrl(null);
+    setMergedInfo(null);
   };
 
   const moveDown = (idx: number) => {
@@ -59,12 +96,70 @@ export function MergePdfTool() {
     copy[idx] = temp;
     setFiles(copy);
     setMergedUrl(null);
+    setMergedInfo(null);
+  };
+
+  const sortFiles = (mode: SortMode) => {
+    const copy = [...files];
+    switch (mode) {
+      case "name-asc":
+        copy.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+        break;
+      case "name-desc":
+        copy.sort((a, b) => b.name.localeCompare(a.name, undefined, { sensitivity: "base" }));
+        break;
+      case "size-asc":
+        copy.sort((a, b) => a.size - b.size);
+        break;
+      case "size-desc":
+        copy.sort((a, b) => b.size - a.size);
+        break;
+    }
+    setFiles(copy);
+    setMergedUrl(null);
+    setMergedInfo(null);
+  };
+
+  const handleDragStart = (e: React.DragEvent, idx: number) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (idx !== dragOverIndex) setDragOverIndex(idx);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIdx: number) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === dropIdx) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const copy = [...files];
+    const [moved] = copy.splice(dragIndex, 1);
+    copy.splice(dropIdx, 0, moved);
+    setFiles(copy);
+    setMergedUrl(null);
+    setMergedInfo(null);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDragOverIndex(null);
   };
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
     return (bytes / (1024 * 1024)).toFixed(2) + " MB";
   };
+
+  const totalPages = files.reduce((sum, f) => sum + (f.pageCount ?? 0), 0);
+  const pagesKnown = files.some((f) => f.pageCount !== null);
 
   const handleMerge = async () => {
     if (files.length < 2) {
@@ -89,6 +184,7 @@ export function MergePdfTool() {
       const blob = new Blob([mergedBytes as any], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       setMergedUrl(url);
+      setMergedInfo({ pages: mergedPdf.getPageCount(), size: mergedBytes.length });
     } catch (err: any) {
       setError("Failed to merge PDF files: " + (err.message || String(err)));
     } finally {
@@ -148,25 +244,98 @@ export function MergePdfTool() {
 
         {files.length > 0 && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-zinc-400">
-              <span>Selected Files ({files.length})</span>
-              <span>Reorder using arrows</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              <span>
+                Selected Files ({files.length})
+                {pagesKnown && (
+                  <span className="ml-2 normal-case font-mono text-zinc-500">
+                    • {totalPages} {totalPages === 1 ? "page" : "pages"} total
+                  </span>
+                )}
+              </span>
+              <span className="normal-case font-normal">Drag to reorder or use arrows</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mr-1">
+                Sort:
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => sortFiles("name-asc")}
+                title="Sort alphabetically A to Z"
+                className="h-7 text-xs border-zinc-800 text-zinc-400 hover:text-white"
+              >
+                <ArrowDownAZ className="w-3.5 h-3.5 mr-1" />
+                A–Z
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => sortFiles("name-desc")}
+                title="Sort alphabetically Z to A"
+                className="h-7 text-xs border-zinc-800 text-zinc-400 hover:text-white"
+              >
+                <ArrowDownZA className="w-3.5 h-3.5 mr-1" />
+                Z–A
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => sortFiles("size-asc")}
+                title="Sort by file size, smallest first"
+                className="h-7 text-xs border-zinc-800 text-zinc-400 hover:text-white"
+              >
+                <ArrowUpNarrowWide className="w-3.5 h-3.5 mr-1" />
+                Smallest
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => sortFiles("size-desc")}
+                title="Sort by file size, largest first"
+                className="h-7 text-xs border-zinc-800 text-zinc-400 hover:text-white"
+              >
+                <ArrowDownWideNarrow className="w-3.5 h-3.5 mr-1" />
+                Largest
+              </Button>
             </div>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {files.map((item, idx) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 transition-all"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDrop={(e) => handleDrop(e, idx)}
+                  onDragEnd={handleDragEnd}
+                  className={`flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/80 border transition-all cursor-grab active:cursor-grabbing ${
+                    dragOverIndex === idx && dragIndex !== null && dragIndex !== idx
+                      ? "border-blue-500 border-t-2 -translate-y-px"
+                      : "border-zinc-800 hover:border-zinc-700"
+                  } ${dragIndex === idx ? "opacity-50" : ""}`}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
+                    <GripVertical className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                     <span className="w-6 h-6 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400 flex-shrink-0">
                       {idx + 1}
                     </span>
                     <FileText className="w-4 h-4 text-red-400 flex-shrink-0" />
                     <div className="truncate">
                       <p className="text-sm font-medium text-zinc-200 truncate">{item.name}</p>
-                      <p className="text-[11px] text-zinc-500 font-mono">{formatBytes(item.size)}</p>
+                      <p className="text-[11px] text-zinc-500 font-mono">
+                        {formatBytes(item.size)}
+                        <span className="mx-1.5 text-zinc-700">•</span>
+                        {item.pageCount === null ? (
+                          <span className="text-zinc-600">counting pages…</span>
+                        ) : (
+                          <span className="text-blue-400/90">
+                            {item.pageCount} {item.pageCount === 1 ? "page" : "pages"}
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
 
@@ -205,7 +374,11 @@ export function MergePdfTool() {
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-zinc-800">
               <Button
                 variant="outline"
-                onClick={() => setFiles([])}
+                onClick={() => {
+                  setFiles([]);
+                  setMergedUrl(null);
+                  setMergedInfo(null);
+                }}
                 className="border-zinc-800 text-zinc-400 hover:text-white"
               >
                 Clear All
@@ -227,7 +400,17 @@ export function MergePdfTool() {
               <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0" />
               <div>
                 <h4 className="text-sm font-semibold text-emerald-300">PDFs Merged Successfully!</h4>
-                <p className="text-xs text-zinc-400">Combined {files.length} files into one seamless document.</p>
+                <p className="text-xs text-zinc-400">
+                  Combined {files.length} files
+                  {mergedInfo && (
+                    <>
+                      {" "}
+                      • {mergedInfo.pages} {mergedInfo.pages === 1 ? "page" : "pages"} •{" "}
+                      {formatBytes(mergedInfo.size)}
+                    </>
+                  )}{" "}
+                  into one seamless document.
+                </p>
               </div>
             </div>
             <a
