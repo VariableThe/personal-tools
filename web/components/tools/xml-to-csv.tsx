@@ -163,24 +163,24 @@ export function XmlToCsvTool() {
   };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/60 shadow-xl">
+    <Card>
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-400" />
+            <FileText className="w-5 h-5 text-primary" />
             XML / Plist to CSV Converter
           </CardTitle>
-          <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10">
+          <Badge variant="outline">
             100% On-Device Parser
           </Badge>
         </div>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-muted-foreground">
           Flatten complex XML catalogs or Apple Music plist library exports into clean spreadsheet tables.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-950/40 text-center">
+        <div className="border-2 border-dashed border-border hover:border-primary/60 rounded-none p-8 transition-all bg-muted/40 text-center">
           <input
             type="file"
             accept=".xml,.plist"
@@ -192,25 +192,25 @@ export function XmlToCsvTool() {
             htmlFor="xml-upload"
             className="cursor-pointer flex flex-col items-center justify-center space-y-3"
           >
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-none bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
               <Upload className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-base font-semibold text-zinc-200">
+              <p className="text-base font-semibold text-foreground">
                 {file ? file.name : "Select or Drag & Drop an XML / Plist File"}
               </p>
-              <p className="text-xs text-zinc-400 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Supports Apple Music Library (`Library.xml`), RSS feeds, or standard XML catalogs.
               </p>
             </div>
-            <Button variant="default" className="bg-blue-600 hover:bg-blue-500 pointer-events-none">
+            <Button variant="default">
               Browse XML File
             </Button>
           </label>
         </div>
 
         {error && (
-          <Alert className="border-red-500/40 bg-red-500/10 text-red-300 text-sm">
+          <Alert variant="destructive">
             <AlertCircle className="w-4 h-4 inline mr-2" />
             {error}
           </Alert>
@@ -218,56 +218,56 @@ export function XmlToCsvTool() {
 
         {csvContent && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-zinc-950/80 border border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-none bg-muted/60 border border-border">
               <div className="flex items-center gap-3">
-                <FileText className="w-6 h-6 text-emerald-400" />
+                <FileText className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                 <div>
-                  <h4 className="font-medium text-zinc-200">Converted Successfully!</h4>
-                  <p className="text-xs text-zinc-400">
+                  <h4 className="font-medium text-foreground">Converted Successfully!</h4>
+                  <p className="text-xs text-muted-foreground">
                     Found {columns.length} columns and ready for local download.
                   </p>
                 </div>
               </div>
               <Button
                 onClick={downloadCsv}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
+               
               >
                 <Download className="w-4 h-4 mr-2" />
                 Download CSV ({fileName})
               </Button>
             </div>
 
-            <div className="border border-zinc-800 rounded-xl overflow-hidden bg-zinc-950/60">
-              <div className="p-3 bg-zinc-900/80 border-b border-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wider flex justify-between items-center">
+            <div className="border border-border rounded-none overflow-hidden bg-muted/60">
+              <div className="p-3 bg-muted/60 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider flex justify-between items-center">
                 <span>Data Preview (First 10 Rows)</span>
                 <span>Total Columns: {columns.length}</span>
               </div>
               <div className="overflow-x-auto max-h-80">
-                <table className="w-full text-left text-xs text-zinc-300">
-                  <thead className="bg-zinc-900/40 text-zinc-400 sticky top-0">
+                <table className="w-full text-left text-xs text-foreground">
+                  <thead className="bg-muted/50 text-muted-foreground sticky top-0">
                     <tr>
                       {columns.slice(0, 8).map((col) => (
-                        <th key={col} className="p-3 font-medium whitespace-nowrap border-b border-zinc-800">
+                        <th key={col} className="p-3 font-medium whitespace-nowrap border-b border-border">
                           {col}
                         </th>
                       ))}
                       {columns.length > 8 && (
-                        <th className="p-3 font-medium text-zinc-500 border-b border-zinc-800">
+                        <th className="p-3 font-medium text-muted-foreground border-b border-border">
                           + {columns.length - 8} more columns...
                         </th>
                       )}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60">
+                  <tbody className="divide-y divide-border">
                     {previewRows.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-zinc-900/40 transition-colors">
+                      <tr key={idx} className="hover:bg-muted/50 transition-colors">
                         {columns.slice(0, 8).map((col) => (
                           <td key={col} className="p-3 max-w-xs truncate whitespace-nowrap">
                             {row[col] || "-"}
                           </td>
                         ))}
                         {columns.length > 8 && (
-                          <td className="p-3 text-zinc-500 italic">...</td>
+                          <td className="p-3 text-muted-foreground italic">...</td>
                         )}
                       </tr>
                     ))}

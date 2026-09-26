@@ -103,25 +103,25 @@ export function ImageResizerTool() {
   };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/60 shadow-xl">
+    <Card>
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <Sliders className="w-5 h-5 text-blue-400" />
+            <Sliders className="w-5 h-5 text-primary" />
             Compress & Resize Image
           </CardTitle>
-          <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10">
+          <Badge variant="outline">
             100% On-Device Canvas
           </Badge>
         </div>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-muted-foreground">
           Scale pixel resolution, adjust compression quality, and convert image formats.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
         {!imageSrc ? (
-          <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-950/40 text-center">
+          <div className="border-2 border-dashed border-border hover:border-primary/60 rounded-none p-8 transition-all bg-muted/40 text-center">
             <input
               type="file"
               accept="image/*"
@@ -133,58 +133,58 @@ export function ImageResizerTool() {
               htmlFor="resizer-upload"
               className="cursor-pointer flex flex-col items-center justify-center space-y-3"
             >
-              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-none bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                 <Upload className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-base font-semibold text-zinc-200">Select an Image to Compress</p>
+                <p className="text-base font-semibold text-foreground">Select an Image to Compress</p>
               </div>
-              <Button variant="default" className="bg-blue-600 hover:bg-blue-500 pointer-events-none">
+              <Button variant="default">
                 Choose Image
               </Button>
             </label>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-6">
+            <div className="lg:col-span-1 p-6 rounded-none bg-muted/60 border border-border space-y-6">
               <div className="space-y-4">
                 <div>
-                  <Label className="text-xs font-semibold text-zinc-300 block mb-2">Dimensions (px)</Label>
+                  <Label className="text-xs font-semibold text-foreground block mb-2">Dimensions (px)</Label>
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
-                      <span className="text-[10px] text-zinc-500 block">Width</span>
+                      <span className="text-[10px] text-muted-foreground block">Width</span>
                       <Input
                         type="number"
                         value={width}
                         onChange={(e) => handleWidthChange(Number(e.target.value))}
-                        className="bg-zinc-900 border-zinc-800 font-mono text-xs"
+                        className="bg-muted border-border font-mono text-xs"
                       />
                     </div>
-                    <span className="text-zinc-600 mt-4">×</span>
+                    <span className="text-muted-foreground mt-4">×</span>
                     <div className="flex-1">
-                      <span className="text-[10px] text-zinc-500 block">Height</span>
+                      <span className="text-[10px] text-muted-foreground block">Height</span>
                       <Input
                         type="number"
                         value={height}
                         onChange={(e) => handleHeightChange(Number(e.target.value))}
-                        className="bg-zinc-900 border-zinc-800 font-mono text-xs"
+                        className="bg-muted border-border font-mono text-xs"
                       />
                     </div>
                   </div>
                 </div>
 
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-foreground">
                   <input
                     type="checkbox"
                     checked={maintainAspect}
                     onChange={(e) => setMaintainAspect(e.target.checked)}
-                    className="rounded bg-zinc-900 border-zinc-800 text-blue-500 focus:ring-0"
+                    className="rounded-none bg-muted border-border text-primary focus:ring-0"
                   />
                   Maintain Aspect Ratio
                 </label>
 
-                <div className="border-t border-zinc-800 pt-4">
-                  <Label className="text-xs font-semibold text-zinc-300 block mb-2">Export Format</Label>
+                <div className="border-t border-border pt-4">
+                  <Label className="text-xs font-semibold text-foreground block mb-2">Export Format</Label>
                   <div className="grid grid-cols-3 gap-2">
                     {(["image/webp", "image/png", "image/jpeg"] as const).map((fmt) => (
                       <Button
@@ -192,7 +192,7 @@ export function ImageResizerTool() {
                         variant={format === fmt ? "default" : "outline"}
                         size="sm"
                         onClick={() => setFormat(fmt)}
-                        className={`text-xs uppercase ${format === fmt ? "bg-blue-600" : "border-zinc-800"}`}
+                        className={`text-xs uppercase ${format === fmt ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}
                       >
                         {fmt.split("/")[1]}
                       </Button>
@@ -202,22 +202,22 @@ export function ImageResizerTool() {
 
                 {format !== "image/png" && (
                   <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-zinc-400">
+                    <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Quality</span>
-                      <span className="font-mono text-zinc-200">{quality[0]}%</span>
+                      <span className="font-mono text-foreground">{quality[0]}%</span>
                     </div>
                     <Slider value={quality} onValueChange={setQuality} min={10} max={100} step={5} />
                   </div>
                 )}
 
-                <div className="border-t border-zinc-800 pt-4 space-y-2">
-                  <div className="flex justify-between text-xs text-zinc-400">
+                <div className="border-t border-border pt-4 space-y-2">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Original Size:</span>
-                    <span className="font-mono text-zinc-300">{file ? formatBytes(file.size) : "-"}</span>
+                    <span className="font-mono text-foreground">{file ? formatBytes(file.size) : "-"}</span>
                   </div>
-                  <div className="flex justify-between text-xs text-zinc-400">
+                  <div className="flex justify-between text-xs text-muted-foreground">
                     <span>New Approx Size:</span>
-                    <span className="font-mono text-emerald-400 font-semibold">
+                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
                       {outputSize ? formatBytes(outputSize) : "-"}
                     </span>
                   </div>
@@ -227,22 +227,22 @@ export function ImageResizerTool() {
                   <Button
                     onClick={downloadImage}
                     disabled={!outputUrl}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/20"
+                    className="w-full bg-primary hover:bg-primary/80 text-primary-foreground font-medium"
                   >
                     <Download className="w-4 h-4 mr-2" /> Download Processed Image
                   </Button>
-                  <Button variant="ghost" onClick={() => setImageSrc(null)} className="w-full text-zinc-400">
+                  <Button variant="ghost" onClick={() => setImageSrc(null)} className="w-full text-muted-foreground">
                     Select Another Image
                   </Button>
                 </div>
               </div>
             </div>
 
-            <div className="lg:col-span-2 border border-zinc-800 rounded-2xl p-4 bg-zinc-950 flex items-center justify-center min-h-[400px]">
+            <div className="lg:col-span-2 border border-border rounded-none p-4 bg-background flex items-center justify-center min-h-[400px]">
               {outputUrl ? (
-                <img src={outputUrl} alt="Resized Preview" className="max-h-[450px] object-contain rounded shadow" />
+                <img src={outputUrl} alt="Resized Preview" className="max-h-[450px] object-contain" />
               ) : (
-                <span className="text-sm text-zinc-500">Processing preview...</span>
+                <span className="text-sm text-muted-foreground">Processing preview...</span>
               )}
             </div>
           </div>

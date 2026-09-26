@@ -2,8 +2,6 @@
 
 import React, { useState } from "react";
 import {
-  Shield,
-  Sparkles,
   Layers,
   Scissors,
   RotateCw,
@@ -21,6 +19,11 @@ import {
   Image as ImageIcon,
   Zap,
   Mic,
+  Search,
+  Star,
+  Sparkles,
+  X,
+  type LucideIcon,
 } from "lucide-react";
 
 import { MergePdfTool } from "@/components/tools/pdf/merge-pdf";
@@ -44,11 +47,127 @@ import { ImageUpscalerTool } from "@/components/tools/image/image-upscaler";
 import { XmlToCsvTool } from "@/components/tools/xml-to-csv";
 import { AudioTranscriberTool } from "@/components/tools/audio/audio-transcriber";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+interface ToolDef {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+const CATEGORIES: Record<string, { label: string; icon: LucideIcon; tools: ToolDef[] }> = {
+  pdf: {
+    label: "PDF",
+    icon: FolderKanban,
+    tools: [
+      { id: "merge", label: "Merge PDF", icon: Layers },
+      { id: "split", label: "Split PDF", icon: Scissors },
+      { id: "rotate", label: "Rotate PDF", icon: RotateCw },
+      { id: "watermark", label: "Watermark", icon: Stamp },
+      { id: "numbers", label: "Page Numbers", icon: Hash },
+      { id: "img-to-pdf", label: "JPG to PDF", icon: FileImage },
+      { id: "pdf-to-png", label: "PDF to PNG", icon: ImageIcon },
+      { id: "notebooklm", label: "Notes to PDF", icon: BookOpenText },
+    ],
+  },
+  image: {
+    label: "Image",
+    icon: ImageIcon,
+    tools: [
+      { id: "remove-bg", label: "AI Remove BG", icon: Sparkles },
+      { id: "upscale", label: "HD Upscaler", icon: Zap },
+      { id: "compress", label: "Compress & Resize", icon: Sliders },
+      { id: "crop", label: "Crop Image", icon: Crop },
+      { id: "watermark-img", label: "Watermark Photo", icon: Stamp },
+      { id: "redact", label: "Redact / Blur", icon: EyeOff },
+      { id: "ocr", label: "OCR to Text", icon: FileText },
+      { id: "color", label: "Color Extractor", icon: Pipette },
+    ],
+  },
+  audio: {
+    label: "Audio",
+    icon: Mic,
+    tools: [{ id: "transcribe", label: "Audio Transcriber", icon: Mic }],
+  },
+  data: {
+    label: "Data",
+    icon: FileText,
+    tools: [
+      { id: "xml", label: "XML / Plist to CSV", icon: FileText },
+      { id: "color-data", label: "Color Extractor", icon: Pipette },
+    ],
+  },
+};
+
+function categoryOf(toolId: string): string {
+  for (const [cat, def] of Object.entries(CATEGORIES)) {
+    if (def.tools.some((t) => t.id === toolId)) return cat;
+  }
+  return "pdf";
+}
+
+/** Initial category/tool from ?tool= deep link (or defaults). SSR-safe. */
+function initialSelection(): { category: string; tool: string } {
+  if (typeof window !== "undefined") {
+    const id = new URLSearchParams(window.location.search).get("tool");
+    if (id && categoryOf(id) !== "pdf") return { category: categoryOf(id), tool: id };
+    if (id) {
+      const known = Object.values(CATEGORIES).some((c) => c.tools.some((t) => t.id === id));
+      if (known) return { category: "pdf", tool: id };
+    }
+  }
+  return { category: "pdf", tool: "merge" };
+}
+
+function initialFavs(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem("vrbl-favs") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+const FAVS_KEY = "vrbl-favs";
 
 export default function Home() {
-  const [activeSubTabPdf, setActiveSubTabPdf] = useState("merge");
-  const [activeSubTabImg, setActiveSubTabImg] = useState("compress");
-  const [activeSubTabData, setActiveSubTabData] = useState("xml");
+  const [selection] = useState(initialSelection);
+  const [category, setCategory] = useState(selection.category);
+  const [activeTool, setActiveTool] = useState<Record<string, string>>({
+    pdf: selection.category === "pdf" ? selection.tool : "merge",
+    image: "compress",
+    audio: "transcribe",
+    data: "xml",
+  });
+  const [query, setQuery] = useState("");
+  const [favs, setFavs] = useState<string[]>(initialFavs);
+
+  const totalTools = Object.values(CATEGORIES).reduce((n, c) => n + c.tools.length, 0);
+
+  const selectTool = (cat: string, id: string) => {
+    setCategory(cat);
+    setActiveTool((prev) => ({ ...prev, [cat]: id }));
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tool", id);
+      window.history.replaceState(null, "", url.toString());
+    } catch {
+      // URL sync is best-effort (e.g. sandboxed iframes)
+    }
+  };
+
+  const toggleFav = (id: string) => {
+    setFavs((prev) => {
+      const next = prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id];
+      try {
+        localStorage.setItem(FAVS_KEY, JSON.stringify(next));
+      } catch {
+        // private mode etc. — favorites just don't persist
+      }
+      return next;
+    });
+  };
 
   const subBtn = (active: boolean) =>
     `flex items-center gap-2 px-3.5 py-2 border text-xs font-mono uppercase tracking-wide transition-colors font-medium ${
@@ -57,161 +176,221 @@ export default function Home() {
         : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
     }`;
 
-  return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground font-mono">
-      <div className="relative max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8 space-y-10">
-        <header className="text-center space-y-5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 border border-primary/30 bg-primary/10 text-primary text-[10px] font-mono uppercase tracking-widest font-bold">
-            <Sparkles className="w-3.5 h-3.5" />
-            vrbl.win · On-Device Utility Hub
-          </div>
+  /** Tools for a category: favorites first, then filtered by search. */
+  const visibleTools = (cat: string): ToolDef[] => {
+    const q = query.trim().toLowerCase();
+    const tools = CATEGORIES[cat].tools.filter(
+      (t) => !q || t.label.toLowerCase().includes(q) || t.id.includes(q)
+    );
+    return [...tools].sort((a, b) => {
+      const fa = favs.includes(a.id) ? 0 : 1;
+      const fb = favs.includes(b.id) ? 0 : 1;
+      return fa - fb;
+    });
+  };
 
-          <div className="space-y-1">
-            <h1 className="text-4xl sm:text-6xl font-black uppercase tracking-tighter p5-skew">
-              <span className="bg-foreground text-background px-2 py-1 inline-block p5-shadow">Tool</span>
+  const toolButton = (cat: string, sub: ToolDef) => {
+    const Icon = sub.icon;
+    const isFav = favs.includes(sub.id);
+    return (
+      <span key={sub.id} className="inline-flex items-stretch">
+        <button onClick={() => selectTool(cat, sub.id)} className={subBtn(activeTool[cat] === sub.id)}>
+          <Icon className="w-4 h-4" /> {sub.label}
+        </button>
+        <button
+          onClick={() => toggleFav(sub.id)}
+          title={isFav ? "Remove from favorites" : "Add to favorites"}
+          aria-label={isFav ? `Unfavorite ${sub.label}` : `Favorite ${sub.label}`}
+          className={`px-1.5 border border-l-0 transition-colors ${
+            isFav
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border bg-card text-muted-foreground/40 hover:text-primary"
+          }`}
+        >
+          <Star className={`w-3.5 h-3.5 ${isFav ? "fill-current" : ""}`} />
+        </button>
+      </span>
+    );
+  };
+
+  /** Global results across every category while searching. */
+  const renderGlobalResults = () => {
+    const q = query.trim().toLowerCase();
+    const groups = Object.entries(CATEGORIES)
+      .map(([cat, def]) => ({
+        cat,
+        label: def.label,
+        tools: def.tools.filter(
+          (t) => t.label.toLowerCase().includes(q) || t.id.includes(q)
+        ),
+      }))
+      .filter((g) => g.tools.length > 0);
+    if (groups.length === 0) {
+      return <p className="text-center text-xs text-muted-foreground py-2">No tools match “{query}”.</p>;
+    }
+    return (
+      <div className="space-y-3 border-b border-border pb-4">
+        {groups.map((g) => (
+          <div key={g.cat} className="flex items-center gap-3 flex-wrap justify-center">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-14 text-right">
+              {g.label}
+            </span>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {g.tools.map((t) => toolButton(g.cat, t))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  /** First global match (for Enter-to-jump). */
+  const firstMatch = (): { cat: string; id: string } | null => {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    for (const [cat, def] of Object.entries(CATEGORIES)) {
+      const hit = def.tools.find((t) => t.label.toLowerCase().includes(q) || t.id.includes(q));
+      if (hit) return { cat, id: hit.id };
+    }
+    return null;
+  };
+
+  const renderSubRow = (cat: string) => {
+    if (query.trim()) return renderGlobalResults();
+    const tools = visibleTools(cat);
+    return (
+      <div className="flex flex-wrap gap-2 justify-center border-b border-border pb-4">
+        {tools.map((sub) => toolButton(cat, sub))}
+      </div>
+    );
+  };
+
+  /** Active tool, falling back to the first visible match while searching. */
+  const shownTool = (cat: string): string => {
+    const tools = visibleTools(cat);
+    if (tools.some((t) => t.id === activeTool[cat])) return activeTool[cat];
+    return tools[0]?.id ?? "";
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
+      <div className="relative max-w-7xl mx-auto px-3 py-5 sm:px-4 space-y-5">
+        <header className="flex items-start justify-between gap-4">
+          <div className="space-y-2 min-w-0">
+            <h1 className="text-6xl sm:text-7xl font-black uppercase tracking-tighter leading-[0.9] p5-skew">
+              <span className="bg-foreground text-background px-2 py-0.5 inline-block p5-shadow">Tool</span>
               <span className="text-primary"> Suite</span>
             </h1>
-            <p className="max-w-2xl mx-auto text-sm text-muted-foreground font-mono">
-              PDF editors · image utilities · audio transcription — all running 100% locally in your browser.
+            <p className="text-[11px] lg:text-xs text-muted-foreground font-mono md:whitespace-nowrap">
+              <span className="md:hidden">{totalTools} utilities · 100% on-device</span>
+              <span className="hidden md:inline">
+                {totalTools} utilities · PDF · image · audio · data — 100% on-device, zero uploads. No
+                files ever leave your browser.
+              </span>
             </p>
           </div>
-
-          <div className="max-w-3xl mx-auto border border-border bg-card p-4 flex items-center gap-4 text-left">
-            <div className="w-10 h-10 border border-primary/20 bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xs font-mono uppercase tracking-widest font-bold">100% On-Device · Zero Uploads</h3>
-              <p className="font-mono text-xs text-muted-foreground mt-1 leading-relaxed">
-                Every tool runs in your browser via WASM & Canvas (<span className="text-foreground font-bold">pdf-lib · tesseract.js · whisper</span>). No files ever leave your device.
-              </p>
-            </div>
-          </div>
+          <ThemeToggle />
         </header>
 
-        <Tabs defaultValue="pdf" className="w-full space-y-8">
-          <div className="flex justify-center">
-            <TabsList className="grid grid-cols-4 bg-card border border-border w-full max-w-2xl h-auto p-1 gap-1">
-              <TabsTrigger
-                value="pdf"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2"
-              >
-                <FolderKanban className="w-4 h-4" />
-                PDF (8)
-              </TabsTrigger>
-              <TabsTrigger
-                value="image"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2"
-              >
-                <ImageIcon className="w-4 h-4" />
-                Image (8)
-              </TabsTrigger>
-              <TabsTrigger
-                value="audio"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2"
-              >
-                <Mic className="w-4 h-4" />
-                Audio (1)
-              </TabsTrigger>
-              <TabsTrigger
-                value="data"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2"
-              >
-                <FileText className="w-4 h-4" />
-                Data (2)
-              </TabsTrigger>
+        <Tabs
+          value={category}
+          onValueChange={(cat) => selectTool(cat, shownTool(cat))}
+          className="w-full space-y-6"
+          // Favorites (localStorage) and ?tool= deep links intentionally
+          // differ between SSR and first client paint; client wins.
+          suppressHydrationWarning
+        >
+          <div className="space-y-2">
+            <div className="relative w-full sm:w-72 sm:ml-auto">
+              <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const hit = firstMatch();
+                    if (hit) selectTool(hit.cat, hit.id);
+                  }
+                }}
+                placeholder="Filter tools…"
+                aria-label="Filter tools"
+                className="pl-8 pr-8 h-9"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <TabsList className="grid grid-cols-4 bg-card border border-border w-full h-auto p-1 gap-1">
+              {Object.entries(CATEGORIES).map(([cat, def]) => {
+                const CatIcon = def.icon;
+                return (
+                  <TabsTrigger
+                    key={cat}
+                    value={cat}
+                    className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2 min-h-0 h-9"
+                  >
+                    <CatIcon className="w-4 h-4" />
+                    {def.label} ({def.tools.length})
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
           </div>
 
           <TabsContent value="pdf" className="space-y-6">
-            <div className="flex flex-wrap gap-2 justify-center border-b border-border pb-4">
-              {[
-                { id: "merge", label: "Merge PDF", icon: <Layers className="w-4 h-4" /> },
-                { id: "split", label: "Split PDF", icon: <Scissors className="w-4 h-4" /> },
-                { id: "rotate", label: "Rotate PDF", icon: <RotateCw className="w-4 h-4" /> },
-                { id: "watermark", label: "Watermark", icon: <Stamp className="w-4 h-4" /> },
-                { id: "numbers", label: "Page Numbers", icon: <Hash className="w-4 h-4" /> },
-                { id: "img-to-pdf", label: "JPG to PDF", icon: <FileImage className="w-4 h-4" /> },
-                { id: "pdf-to-png", label: "PDF to PNG", icon: <ImageIcon className="w-4 h-4" /> },
-                { id: "notebooklm", label: "Notes to PDF", icon: <BookOpenText className="w-4 h-4" /> },
-              ].map((sub) => (
-                <button key={sub.id} onClick={() => setActiveSubTabPdf(sub.id)} className={subBtn(activeSubTabPdf === sub.id)}>
-                  {sub.icon} {sub.label}
-                </button>
-              ))}
-            </div>
+            {renderSubRow("pdf")}
             <div>
-              {activeSubTabPdf === "merge" && <MergePdfTool />}
-              {activeSubTabPdf === "split" && <SplitPdfTool />}
-              {activeSubTabPdf === "rotate" && <RotatePdfTool />}
-              {activeSubTabPdf === "watermark" && <WatermarkPdfTool />}
-              {activeSubTabPdf === "numbers" && <PageNumbersPdfTool />}
-              {activeSubTabPdf === "img-to-pdf" && <ImagesToPdfTool />}
-              {activeSubTabPdf === "pdf-to-png" && <PdfToPngTool />}
-              {activeSubTabPdf === "notebooklm" && <NotebookLmToPdfTool />}
+              {shownTool("pdf") === "merge" && <MergePdfTool />}
+              {shownTool("pdf") === "split" && <SplitPdfTool />}
+              {shownTool("pdf") === "rotate" && <RotatePdfTool />}
+              {shownTool("pdf") === "watermark" && <WatermarkPdfTool />}
+              {shownTool("pdf") === "numbers" && <PageNumbersPdfTool />}
+              {shownTool("pdf") === "img-to-pdf" && <ImagesToPdfTool />}
+              {shownTool("pdf") === "pdf-to-png" && <PdfToPngTool />}
+              {shownTool("pdf") === "notebooklm" && <NotebookLmToPdfTool />}
             </div>
           </TabsContent>
 
           <TabsContent value="image" className="space-y-6">
-            <div className="flex flex-wrap gap-2 justify-center border-b border-border pb-4">
-              {[
-                { id: "remove-bg", label: "AI Remove BG", icon: <Sparkles className="w-4 h-4" /> },
-                { id: "upscale", label: "HD Upscaler", icon: <Zap className="w-4 h-4" /> },
-                { id: "compress", label: "Compress & Resize", icon: <Sliders className="w-4 h-4" /> },
-                { id: "crop", label: "Crop Image", icon: <Crop className="w-4 h-4" /> },
-                { id: "watermark-img", label: "Watermark Photo", icon: <Stamp className="w-4 h-4" /> },
-                { id: "redact", label: "Redact / Blur", icon: <EyeOff className="w-4 h-4" /> },
-                { id: "ocr", label: "OCR to Text", icon: <FileText className="w-4 h-4" /> },
-                { id: "color", label: "Color Extractor", icon: <Pipette className="w-4 h-4" /> },
-              ].map((sub) => (
-                <button key={sub.id} onClick={() => setActiveSubTabImg(sub.id)} className={subBtn(activeSubTabImg === sub.id)}>
-                  {sub.icon} {sub.label}
-                </button>
-              ))}
-            </div>
+            {renderSubRow("image")}
             <div>
-              {activeSubTabImg === "remove-bg" && <RemoveBgTool />}
-              {activeSubTabImg === "upscale" && <ImageUpscalerTool />}
-              {activeSubTabImg === "compress" && <ImageResizerTool />}
-              {activeSubTabImg === "crop" && <CropImageTool />}
-              {activeSubTabImg === "watermark-img" && <WatermarkImageTool />}
-              {activeSubTabImg === "redact" && <RedactBlurTool />}
-              {activeSubTabImg === "ocr" && <ImageToTextTool />}
-              {activeSubTabImg === "color" && <ColorExtractorTool />}
+              {shownTool("image") === "remove-bg" && <RemoveBgTool />}
+              {shownTool("image") === "upscale" && <ImageUpscalerTool />}
+              {shownTool("image") === "compress" && <ImageResizerTool />}
+              {shownTool("image") === "crop" && <CropImageTool />}
+              {shownTool("image") === "watermark-img" && <WatermarkImageTool />}
+              {shownTool("image") === "redact" && <RedactBlurTool />}
+              {shownTool("image") === "ocr" && <ImageToTextTool />}
+              {shownTool("image") === "color" && <ColorExtractorTool />}
             </div>
           </TabsContent>
 
           <TabsContent value="audio" className="space-y-6">
-            <div className="flex justify-center border-b border-border pb-4">
-              <div className="flex items-center gap-2 px-3.5 py-2 bg-primary text-primary-foreground border border-primary font-mono text-xs uppercase tracking-wide font-bold">
-                <Mic className="w-4 h-4" /> Audio Transcriber — Whisper (on-device)
-              </div>
-            </div>
+            {query.trim() && renderGlobalResults()}
             <div className="max-w-4xl mx-auto">
               <AudioTranscriberTool />
             </div>
           </TabsContent>
 
           <TabsContent value="data" className="space-y-6">
-            <div className="flex flex-wrap gap-2 justify-center border-b border-border pb-4">
-              {[
-                { id: "xml", label: "XML / Plist to CSV", icon: <FileText className="w-4 h-4" /> },
-                { id: "color-data", label: "Color Extractor", icon: <Pipette className="w-4 h-4" /> },
-              ].map((sub) => (
-                <button key={sub.id} onClick={() => setActiveSubTabData(sub.id)} className={subBtn(activeSubTabData === sub.id)}>
-                  {sub.icon} {sub.label}
-                </button>
-              ))}
-            </div>
+            {renderSubRow("data")}
             <div>
-              {activeSubTabData === "xml" && <XmlToCsvTool />}
-              {activeSubTabData === "color-data" && <ColorExtractorTool />}
+              {shownTool("data") === "xml" && <XmlToCsvTool />}
+              {shownTool("data") === "color-data" && <ColorExtractorTool />}
             </div>
           </TabsContent>
         </Tabs>
 
         <footer className="text-center pt-8 border-t border-border font-mono text-xs text-muted-foreground space-y-3">
-          <p className="uppercase tracking-wide">17 tools · all local · vrbl.win design system · square · red · mono</p>
+          <p className="uppercase tracking-wide">
+            {totalTools} tools · all local · vrbl.win design system · square · red · mono
+          </p>
           <div className="flex items-center justify-center gap-4">
             <a
               href="https://github.com/VariableThe/personal-tools"

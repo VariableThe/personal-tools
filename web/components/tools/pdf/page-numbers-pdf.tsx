@@ -73,24 +73,24 @@ export function PageNumbersPdfTool() {
   };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/60 shadow-xl">
+    <Card>
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <Hash className="w-5 h-5 text-blue-400" />
+            <Hash className="w-5 h-5 text-primary" />
             Add Page Numbers to PDF
           </CardTitle>
-          <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10">
+          <Badge variant="outline">
             100% On-Device WASM
           </Badge>
         </div>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-muted-foreground">
           Insert clean page numbering (`Page X of Y`) to document headers or footers.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-950/40 text-center">
+        <div className="border-2 border-dashed border-border hover:border-primary/60 rounded-none p-8 transition-all bg-muted/40 text-center">
           <input
             type="file"
             accept=".pdf"
@@ -102,30 +102,30 @@ export function PageNumbersPdfTool() {
             htmlFor="number-upload"
             className="cursor-pointer flex flex-col items-center justify-center space-y-3"
           >
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-none bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
               <Upload className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-base font-semibold text-zinc-200">
+              <p className="text-base font-semibold text-foreground">
                 {file ? file.name : "Select a PDF Document"}
               </p>
             </div>
-            <Button variant="default" className="bg-blue-600 hover:bg-blue-500 pointer-events-none">
+            <Button variant="default">
               Choose PDF File
             </Button>
           </label>
         </div>
 
         {error && (
-          <Alert className="border-red-500/40 bg-red-500/10 text-red-300 text-sm">
+          <Alert variant="destructive">
             {error}
           </Alert>
         )}
 
         {file && (
-          <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-4">
+          <div className="p-6 rounded-none bg-muted/60 border border-border space-y-4">
             <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 block mb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-3">
                 Numbering Placement Position
               </span>
               <div className="grid grid-cols-3 gap-3">
@@ -142,8 +142,8 @@ export function PageNumbersPdfTool() {
                     onClick={() => setPosition(pos.id)}
                     className={`py-6 text-sm font-semibold ${
                       position === pos.id
-                        ? "bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-600/20"
-                        : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white hover:border-zinc-700"
+                        ? "bg-primary hover:bg-primary/80 text-primary-foreground border-primary"
+                        : "border-border bg-muted text-foreground hover:text-foreground hover:border-foreground/30"
                     }`}
                   >
                     {pos.label}
@@ -155,7 +155,7 @@ export function PageNumbersPdfTool() {
             <Button
               onClick={handleApplyNumbers}
               disabled={processing}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-6 shadow-lg shadow-blue-600/20"
+              className="w-full bg-primary hover:bg-primary/80 text-primary-foreground font-medium py-6"
             >
               {processing ? "Adding Numbers..." : "Apply Page Numbers"}
             </Button>
@@ -163,18 +163,18 @@ export function PageNumbersPdfTool() {
         )}
 
         {numberedUrl && (
-          <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+          <div className="p-4 rounded-none bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in duration-300">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
               <div>
-                <h4 className="text-sm font-semibold text-emerald-300">Page Numbers Added!</h4>
-                <p className="text-xs text-zinc-400">Formatted and stamped across all document pages.</p>
+                <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Page Numbers Added!</h4>
+                <p className="text-xs text-muted-foreground">Formatted and stamped across all document pages.</p>
               </div>
             </div>
             <a
               href={numberedUrl}
               download={`${file?.name.replace(/\.pdf$/i, "")}_numbered.pdf`}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm shadow-lg shadow-emerald-600/20 transition-all"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/80 text-primary-foreground rounded-none font-medium text-sm transition-all"
             >
               <Download className="w-4 h-4" />
               Download Numbered PDF
