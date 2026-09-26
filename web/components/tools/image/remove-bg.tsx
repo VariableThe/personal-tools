@@ -68,7 +68,7 @@ export function RemoveBgTool() {
     <div className="space-y-8 bg-muted/50 border border-border rounded-none p-6 sm:p-8 max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-none bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold mb-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-none bg-primary/10 border border-primary/20 text-primary text-xs font-semibold mb-2">
             <Sparkles className="w-3.5 h-3.5" />
             On-Device AI Neural Network
           </div>
@@ -82,9 +82,9 @@ export function RemoveBgTool() {
       </div>
 
       {!file ? (
-        <label className="border-2 border-dashed border-border hover:border-emerald-600/40 rounded-none p-12 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all bg-muted/40 group">
+        <label className="border-2 border-dashed border-border hover:border-primary/60 rounded-none p-12 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all bg-muted/40 group">
           <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-          <div className="w-16 h-16 rounded-none bg-muted/80 flex items-center justify-center text-muted-foreground group-hover:text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-all">
+          <div className="w-16 h-16 rounded-none bg-muted/80 flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all">
             <Upload className="w-8 h-8" />
           </div>
           <div className="text-center">
@@ -105,7 +105,7 @@ export function RemoveBgTool() {
             </div>
 
             <div className="bg-muted/60 border border-border rounded-none p-4 flex flex-col items-center">
-              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 self-start mb-3 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-xs font-medium text-primary self-start mb-3 uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" /> Result (Transparent Cutout)
               </span>
               <div className="w-full h-64 sm:h-80 rounded-none overflow-hidden flex items-center justify-center border border-border relative"
@@ -119,11 +119,11 @@ export function RemoveBgTool() {
                   <img src={processedUrl} alt="Processed Cutout" className="max-h-full max-w-full object-contain relative z-10" />
                 ) : isProcessing ? (
                   <div className="flex flex-col items-center justify-center gap-3 p-6 text-center z-10">
-                    <Loader2 className="w-10 h-10 text-emerald-600 dark:text-emerald-600 dark:text-emerald-400 animate-spin" />
-                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{progressMsg || "Processing AI Cutout..."}</p>
+                    <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                    <p className="text-sm font-medium text-primary">{progressMsg || "Processing AI Cutout..."}</p>
                     {progressPercent > 0 && (
                       <div className="w-48 bg-muted rounded-none h-2 mt-2 overflow-hidden">
-                        <div className="bg-emerald-600 h-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
+                        <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
                       </div>
                     )}
                   </div>
