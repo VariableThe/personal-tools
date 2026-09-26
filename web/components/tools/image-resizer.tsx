@@ -192,7 +192,7 @@ export function ImageResizerTool() {
                         variant={format === fmt ? "default" : "outline"}
                         size="sm"
                         onClick={() => setFormat(fmt)}
-                        className={`text-xs uppercase ${format === fmt ? "bg-blue-600" : "border-border"}`}
+                        className={`text-xs uppercase ${format === fmt ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}
                       >
                         {fmt.split("/")[1]}
                       </Button>

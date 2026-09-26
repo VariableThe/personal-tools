@@ -294,23 +294,8 @@ export default function Home() {
           onValueChange={(cat) => selectTool(cat, shownTool(cat))}
           className="w-full space-y-6"
         >
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <TabsList className="grid grid-cols-4 bg-card border border-border flex-1 h-auto p-1 gap-1">
-              {Object.entries(CATEGORIES).map(([cat, def]) => {
-                const CatIcon = def.icon;
-                return (
-                  <TabsTrigger
-                    key={cat}
-                    value={cat}
-                    className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2"
-                  >
-                    <CatIcon className="w-4 h-4" />
-                    {def.label} ({def.tools.length})
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-            <div className="relative sm:w-56 shrink-0">
+          <div className="space-y-2">
+            <div className="relative w-full sm:w-72 sm:ml-auto">
               <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <Input
                 value={query}
@@ -323,7 +308,7 @@ export default function Home() {
                 }}
                 placeholder="Filter tools…"
                 aria-label="Filter tools"
-                className="pl-8 pr-8"
+                className="pl-8 pr-8 h-9"
               />
               {query && (
                 <button
@@ -335,6 +320,21 @@ export default function Home() {
                 </button>
               )}
             </div>
+            <TabsList className="grid grid-cols-4 bg-card border border-border w-full h-auto p-1 gap-1">
+              {Object.entries(CATEGORIES).map(([cat, def]) => {
+                const CatIcon = def.icon;
+                return (
+                  <TabsTrigger
+                    key={cat}
+                    value={cat}
+                    className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2 min-h-0 h-9"
+                  >
+                    <CatIcon className="w-4 h-4" />
+                    {def.label} ({def.tools.length})
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
           </div>
 
           <TabsContent value="pdf" className="space-y-6">

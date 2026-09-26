@@ -207,7 +207,7 @@ export function ColorExtractorTool() {
                   variant={isPicking ? "default" : "outline"}
                   onClick={() => setIsPicking(!isPicking)}
                   className={`text-xs ${
-                    isPicking ? "bg-purple-600 hover:bg-purple-500 text-white animate-pulse" : "border-border text-foreground"
+                    isPicking ? "bg-primary hover:bg-primary/80 text-primary-foreground animate-pulse" : "border-border text-foreground"
                   }`}
                 >
                   <Pipette className="w-3.5 h-3.5 mr-1.5" />

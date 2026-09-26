@@ -65,14 +65,14 @@ export function RemoveBgTool() {
   };
 
   return (
-    <div className="space-y-8 bg-muted/50 border border-border rounded-3xl p-6 sm:p-8-2xl backdrop-blur-xl max-w-4xl mx-auto">
+    <div className="space-y-8 bg-muted/50 border border-border rounded-none p-6 sm:p-8 max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-none bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold mb-2">
             <Sparkles className="w-3.5 h-3.5" />
             On-Device AI Neural Network
           </div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2.5">
             AI Background Removal
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
@@ -152,7 +152,7 @@ export function RemoveBgTool() {
               <button
                 onClick={handleRemoveBg}
                 disabled={isProcessing}
-                className="px-6 py-2.5 rounded-none bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-sm transition-all flex items-center gap-2"
+                className="px-6 py-2.5 rounded-none bg-primary hover:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold text-sm transition-all flex items-center gap-2"
               >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {isProcessing ? "AI Removing..." : "Remove Background Now"}

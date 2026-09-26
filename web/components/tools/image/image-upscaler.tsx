@@ -134,14 +134,14 @@ export function ImageUpscalerTool() {
   };
 
   return (
-    <div className="space-y-8 bg-muted/50 border border-border rounded-3xl p-6 sm:p-8-2xl backdrop-blur-xl max-w-4xl mx-auto">
+    <div className="space-y-8 bg-muted/50 border border-border rounded-none p-6 sm:p-8 max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-none bg-primary/10 border border-primary/20 text-primary text-xs font-semibold mb-2">
             <Maximize2 className="w-3.5 h-3.5" />
             On-Device Super Resolution
           </div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2.5">
             HD Image Upscaler
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
@@ -173,7 +173,7 @@ export function ImageUpscalerTool() {
                     onClick={() => handleScaleChange(f)}
                     className={`flex-1 py-2 rounded-none text-sm font-bold border transition-all ${
                       scaleFactor === f
-                        ? "bg-blue-600 border-primary text-white"
+                        ? "bg-primary border-primary text-primary-foreground"
                         : "bg-muted border-border text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -190,21 +190,21 @@ export function ImageUpscalerTool() {
                   onClick={() => setMode("sharp")}
                   className={`flex-1 py-2 rounded-none text-sm font-semibold border transition-all ${
                     mode === "sharp"
-                      ? "bg-purple-600 border-purple-500 text-white"
+                      ? "bg-primary border-primary text-primary-foreground"
                       : "bg-muted border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  ✨ Crisp Detail (Sharpen)
+                  Crisp Detail (Sharpen)
                 </button>
                 <button
                   onClick={() => setMode("smooth")}
                   className={`flex-1 py-2 rounded-none text-sm font-semibold border transition-all ${
                     mode === "smooth"
-                      ? "bg-purple-600 border-purple-500 text-white"
+                      ? "bg-primary border-primary text-primary-foreground"
                       : "bg-muted border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  🌊 Smooth HD
+                  Smooth HD
                 </button>
               </div>
             </div>
@@ -212,8 +212,8 @@ export function ImageUpscalerTool() {
 
           {dimensions && (
             <div className="flex items-center justify-center gap-4 text-xs sm:text-sm font-mono text-foreground bg-muted/50 py-2.5 px-4 rounded-none border border-border">
-              <span>Original: <strong className="text-white">{dimensions.origW} × {dimensions.origH}px</strong></span>
-              <span className="text-primary">➔</span>
+              <span>Original: <strong className="text-foreground">{dimensions.origW} × {dimensions.origH}px</strong></span>
+              <span className="text-primary">→</span>
               <span>Upscaled Target: <strong className="text-emerald-600 dark:text-emerald-400">{dimensions.newW} × {dimensions.newH}px</strong></span>
             </div>
           )}
@@ -259,7 +259,7 @@ export function ImageUpscalerTool() {
               <button
                 onClick={processUpscale}
                 disabled={isProcessing}
-                className="px-6 py-2.5 rounded-none bg-blue-600 hover:bg-primary disabled:opacity-50 text-white font-semibold text-sm transition-all flex items-center gap-2"
+                className="px-6 py-2.5 rounded-none bg-primary hover:bg-primary/80 disabled:opacity-50 text-primary-foreground font-semibold text-sm transition-all flex items-center gap-2"
               >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 {isProcessing ? "Upscaling..." : `Upscale ${scaleFactor}x Now`}
