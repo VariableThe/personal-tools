@@ -281,7 +281,7 @@ export default function Home() {
               <span className="bg-foreground text-background px-2 py-0.5 inline-block p5-shadow">Tool</span>
               <span className="text-primary"> Suite</span>
             </h1>
-            <p className="text-[11px] sm:text-xs text-muted-foreground font-mono whitespace-nowrap">
+            <p className="text-[11px] sm:text-xs text-muted-foreground font-mono sm:whitespace-nowrap">
               {totalTools} utilities · PDF · image · audio · data — 100% on-device, zero uploads. No
               files ever leave your browser.
             </p>
