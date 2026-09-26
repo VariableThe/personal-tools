@@ -407,7 +407,7 @@ ${clonedStyles}
               value={source}
               onChange={(e) => setSource(e.target.value)}
               placeholder={"Paste raw NotebookLM Markdown here…\n\nHeadings, lists, tables, $inline math$ and $$display equations$$ are all supported."}
-              className="min-h-[320px] xl:min-h-[480px] font-mono text-sm leading-relaxed resize-y"
+              className="min-h-[320px] xl:min-h-[480px] max-h-[480px] overflow-y-auto font-mono text-sm leading-relaxed resize-y"
             />
             <p className="text-xs text-muted-foreground">
               {wordCount.toLocaleString()} words · {headingCount} headings ·{" "}
@@ -417,7 +417,7 @@ ${clonedStyles}
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center justify-between gap-2 flex-wrap sticky top-0 z-10 bg-card py-2 -my-2">
               <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 Live preview — exactly what the PDF contains
               </span>
