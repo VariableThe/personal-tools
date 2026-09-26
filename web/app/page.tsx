@@ -277,13 +277,16 @@ export default function Home() {
       <div className="relative max-w-7xl mx-auto px-3 py-5 sm:px-4 space-y-5">
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2 min-w-0">
-            <h1 className="text-5xl sm:text-6xl font-black uppercase tracking-tighter p5-skew">
+            <h1 className="text-6xl sm:text-7xl font-black uppercase tracking-tighter leading-[0.9] p5-skew">
               <span className="bg-foreground text-background px-2 py-0.5 inline-block p5-shadow">Tool</span>
               <span className="text-primary"> Suite</span>
             </h1>
-            <p className="text-[11px] sm:text-xs text-muted-foreground font-mono sm:whitespace-nowrap">
-              {totalTools} utilities · PDF · image · audio · data — 100% on-device, zero uploads. No
-              files ever leave your browser.
+            <p className="text-[11px] lg:text-xs text-muted-foreground font-mono md:whitespace-nowrap">
+              <span className="md:hidden">{totalTools} utilities · 100% on-device</span>
+              <span className="hidden md:inline">
+                {totalTools} utilities · PDF · image · audio · data — 100% on-device, zero uploads. No
+                files ever leave your browser.
+              </span>
             </p>
           </div>
           <ThemeToggle />
