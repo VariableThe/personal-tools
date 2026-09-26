@@ -274,14 +274,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground font-mono">
-      <div className="relative max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      <div className="relative max-w-7xl mx-auto px-3 py-5 sm:px-4 space-y-5">
         <header className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter p5-skew">
+          <div className="space-y-2 min-w-0">
+            <h1 className="text-5xl sm:text-6xl font-black uppercase tracking-tighter p5-skew">
               <span className="bg-foreground text-background px-2 py-0.5 inline-block p5-shadow">Tool</span>
               <span className="text-primary"> Suite</span>
             </h1>
-            <p className="max-w-2xl text-xs text-muted-foreground font-mono leading-relaxed">
+            <p className="text-[11px] sm:text-xs text-muted-foreground font-mono whitespace-nowrap">
               {totalTools} utilities · PDF · image · audio · data — 100% on-device, zero uploads. No
               files ever leave your browser.
             </p>
