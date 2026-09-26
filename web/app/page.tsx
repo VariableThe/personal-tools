@@ -189,36 +189,78 @@ export default function Home() {
     });
   };
 
-  const renderSubRow = (cat: string) => {
-    const tools = visibleTools(cat);
-    if (tools.length === 0) {
+  const toolButton = (cat: string, sub: ToolDef) => {
+    const Icon = sub.icon;
+    const isFav = favs.includes(sub.id);
+    return (
+      <span key={sub.id} className="inline-flex items-stretch">
+        <button onClick={() => selectTool(cat, sub.id)} className={subBtn(activeTool[cat] === sub.id)}>
+          <Icon className="w-4 h-4" /> {sub.label}
+        </button>
+        <button
+          onClick={() => toggleFav(sub.id)}
+          title={isFav ? "Remove from favorites" : "Add to favorites"}
+          aria-label={isFav ? `Unfavorite ${sub.label}` : `Favorite ${sub.label}`}
+          className={`px-1.5 border border-l-0 transition-colors ${
+            isFav
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border bg-card text-muted-foreground/40 hover:text-primary"
+          }`}
+        >
+          <Star className={`w-3.5 h-3.5 ${isFav ? "fill-current" : ""}`} />
+        </button>
+      </span>
+    );
+  };
+
+  /** Global results across every category while searching. */
+  const renderGlobalResults = () => {
+    const q = query.trim().toLowerCase();
+    const groups = Object.entries(CATEGORIES)
+      .map(([cat, def]) => ({
+        cat,
+        label: def.label,
+        tools: def.tools.filter(
+          (t) => t.label.toLowerCase().includes(q) || t.id.includes(q)
+        ),
+      }))
+      .filter((g) => g.tools.length > 0);
+    if (groups.length === 0) {
       return <p className="text-center text-xs text-muted-foreground py-2">No tools match “{query}”.</p>;
     }
     return (
-      <div className="flex flex-wrap gap-2 justify-center border-b border-border pb-4">
-        {tools.map((sub) => {
-          const Icon = sub.icon;
-          const isFav = favs.includes(sub.id);
-          return (
-            <span key={sub.id} className="inline-flex items-stretch">
-              <button onClick={() => selectTool(cat, sub.id)} className={subBtn(activeTool[cat] === sub.id)}>
-                <Icon className="w-4 h-4" /> {sub.label}
-              </button>
-              <button
-                onClick={() => toggleFav(sub.id)}
-                title={isFav ? "Remove from favorites" : "Add to favorites"}
-                aria-label={isFav ? `Unfavorite ${sub.label}` : `Favorite ${sub.label}`}
-                className={`px-1.5 border border-l-0 transition-colors ${
-                  isFav
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-card text-muted-foreground/40 hover:text-primary"
-                }`}
-              >
-                <Star className={`w-3.5 h-3.5 ${isFav ? "fill-current" : ""}`} />
-              </button>
+      <div className="space-y-3 border-b border-border pb-4">
+        {groups.map((g) => (
+          <div key={g.cat} className="flex items-center gap-3 flex-wrap justify-center">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-14 text-right">
+              {g.label}
             </span>
-          );
-        })}
+            <div className="flex flex-wrap gap-2 justify-center">
+              {g.tools.map((t) => toolButton(g.cat, t))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  /** First global match (for Enter-to-jump). */
+  const firstMatch = (): { cat: string; id: string } | null => {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    for (const [cat, def] of Object.entries(CATEGORIES)) {
+      const hit = def.tools.find((t) => t.label.toLowerCase().includes(q) || t.id.includes(q));
+      if (hit) return { cat, id: hit.id };
+    }
+    return null;
+  };
+
+  const renderSubRow = (cat: string) => {
+    if (query.trim()) return renderGlobalResults();
+    const tools = visibleTools(cat);
+    return (
+      <div className="flex flex-wrap gap-2 justify-center border-b border-border pb-4">
+        {tools.map((sub) => toolButton(cat, sub))}
       </div>
     );
   };
@@ -273,6 +315,12 @@ export default function Home() {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const hit = firstMatch();
+                    if (hit) selectTool(hit.cat, hit.id);
+                  }
+                }}
                 placeholder="Filter tools…"
                 aria-label="Filter tools"
                 className="pl-8 pr-8"
@@ -318,6 +366,7 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="audio" className="space-y-6">
+            {query.trim() && renderGlobalResults()}
             <div className="max-w-4xl mx-auto">
               <AudioTranscriberTool />
             </div>
