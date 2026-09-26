@@ -273,7 +273,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground font-mono">
+    <div className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
       <div className="relative max-w-7xl mx-auto px-3 py-5 sm:px-4 space-y-5">
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2 min-w-0">
