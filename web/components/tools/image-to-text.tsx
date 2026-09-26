@@ -77,24 +77,24 @@ export function ImageToTextTool() {
   };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/60 shadow-xl">
+    <Card>
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <FileImage className="w-5 h-5 text-blue-400" />
+            <FileImage className="w-5 h-5 text-primary" />
             Image to Text (OCR)
           </CardTitle>
-          <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10">
+          <Badge variant="outline">
             100% On-Device WASM
           </Badge>
         </div>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-muted-foreground">
           Extract optical character text from screenshots or scanned image documents.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-950/40 text-center">
+        <div className="border-2 border-dashed border-border hover:border-primary/60 rounded-none p-8 transition-all bg-muted/40 text-center">
           <input
             type="file"
             accept="image/*"
@@ -106,47 +106,47 @@ export function ImageToTextTool() {
             htmlFor="ocr-upload"
             className="cursor-pointer flex flex-col items-center justify-center space-y-3"
           >
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-none bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
               <Upload className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-base font-semibold text-zinc-200">Select an Image containing Text</p>
-              <p className="text-xs text-zinc-400 mt-1">Runs Tesseract WebAssembly engine locally.</p>
+              <p className="text-base font-semibold text-foreground">Select an Image containing Text</p>
+              <p className="text-xs text-muted-foreground mt-1">Runs Tesseract WebAssembly engine locally.</p>
             </div>
-            <Button variant="default" className="bg-blue-600 hover:bg-blue-500 pointer-events-none">
+            <Button variant="default">
               Upload Image for OCR
             </Button>
           </label>
         </div>
 
         {loading && (
-          <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-3 text-center">
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mx-auto" />
-            <p className="text-sm font-medium text-zinc-200 capitalize">{statusText}</p>
-            <div className="w-full bg-zinc-900 rounded-full h-2 max-w-md mx-auto overflow-hidden">
+          <div className="p-6 rounded-none bg-muted/60 border border-border space-y-3 text-center">
+            <RefreshCw className="w-8 h-8 animate-spin text-primary mx-auto" />
+            <p className="text-sm font-medium text-foreground capitalize">{statusText}</p>
+            <div className="w-full bg-muted rounded-none h-2 max-w-md mx-auto overflow-hidden">
               <div
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                className="bg-primary h-2 rounded-none transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <span className="text-xs text-zinc-400">{progress}%</span>
+            <span className="text-xs text-muted-foreground">{progress}%</span>
           </div>
         )}
 
         {imageSrc && !loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 block">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
                 Source Image
               </span>
-              <div className="border border-zinc-800 rounded-2xl p-4 bg-zinc-950 flex items-center justify-center min-h-[300px]">
-                <img src={imageSrc} alt="Source for OCR" className="max-h-80 object-contain rounded-lg shadow" />
+              <div className="border border-border rounded-none p-4 bg-background flex items-center justify-center min-h-[300px]">
+                <img src={imageSrc} alt="Source for OCR" className="max-h-80 object-contain rounded-none" />
               </div>
             </div>
 
             <div className="space-y-2 flex flex-col">
               <div className="flex justify-between items-center">
-                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Extracted Text Output
                 </span>
                 <div className="flex gap-2">
@@ -155,16 +155,16 @@ export function ImageToTextTool() {
                     variant="outline"
                     onClick={copyToClipboard}
                     disabled={!text}
-                    className="h-7 text-xs border-zinc-800 text-zinc-200"
+                    className="h-7 text-xs border-border text-foreground"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+                    {copied ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
                     {copied ? "Copied" : "Copy"}
                   </Button>
                   <Button
                     size="sm"
                     onClick={downloadTxt}
                     disabled={!text}
-                    className="h-7 text-xs bg-blue-600 hover:bg-blue-500 text-white"
+                    className="h-7 text-xs bg-primary hover:bg-primary/80 text-primary-foreground"
                   >
                     Download .TXT
                   </Button>
@@ -175,7 +175,7 @@ export function ImageToTextTool() {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Extracted text will appear here..."
-                className="w-full flex-grow p-4 bg-zinc-950 border border-zinc-800 rounded-2xl font-mono text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[300px]"
+                className="w-full flex-grow p-4 bg-background border border-border rounded-none font-mono text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[300px]"
               />
             </div>
           </div>

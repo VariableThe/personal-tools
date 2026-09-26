@@ -85,24 +85,24 @@ export function PdfToPngTool() {
   };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/60 shadow-xl">
+    <Card>
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <Layers className="w-5 h-5 text-blue-400" />
+            <Layers className="w-5 h-5 text-primary" />
             PDF to PNG Images
           </CardTitle>
-          <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10">
+          <Badge variant="outline">
             100% On-Device WASM
           </Badge>
         </div>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-muted-foreground">
           Render document pages into crisp high-resolution PNG images directly in memory.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-950/40 text-center">
+        <div className="border-2 border-dashed border-border hover:border-primary/60 rounded-none p-8 transition-all bg-muted/40 text-center">
           <input
             type="file"
             accept=".pdf"
@@ -114,49 +114,49 @@ export function PdfToPngTool() {
             htmlFor="pdf-to-png-upload"
             className="cursor-pointer flex flex-col items-center justify-center space-y-3"
           >
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-none bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
               <Upload className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-base font-semibold text-zinc-200">
+              <p className="text-base font-semibold text-foreground">
                 {file ? file.name : "Select a PDF Document"}
               </p>
-              <p className="text-xs text-zinc-400 mt-1">Extracts every page at high DPI resolution.</p>
+              <p className="text-xs text-muted-foreground mt-1">Extracts every page at high DPI resolution.</p>
             </div>
-            <Button variant="default" className="bg-blue-600 hover:bg-blue-500 pointer-events-none">
+            <Button variant="default">
               Choose PDF File
             </Button>
           </label>
         </div>
 
         {loading && (
-          <div className="p-8 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center space-y-3">
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mx-auto" />
-            <p className="text-sm font-medium text-zinc-300">
+          <div className="p-8 rounded-none bg-muted/60 border border-border text-center space-y-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-primary mx-auto" />
+            <p className="text-sm font-medium text-foreground">
               Rendering PDF pages on device... Please wait.
             </p>
           </div>
         )}
 
         {error && (
-          <Alert className="border-red-500/40 bg-red-500/10 text-red-300 text-sm">
+          <Alert variant="destructive">
             {error}
           </Alert>
         )}
 
         {pageImages.length > 0 && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-zinc-950/80 border border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-none bg-muted/60 border border-border">
               <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                 <div>
-                  <h4 className="font-medium text-zinc-200">Rendered {pageImages.length} Pages</h4>
-                  <p className="text-xs text-zinc-400">Ready for instant local download.</p>
+                  <h4 className="font-medium text-foreground">Rendered {pageImages.length} Pages</h4>
+                  <p className="text-xs text-muted-foreground">Ready for instant local download.</p>
                 </div>
               </div>
               <Button
                 onClick={downloadAllZip}
-                className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
+               
               >
                 <Download className="w-4 h-4 mr-2" />
                 Download All as ZIP
@@ -167,21 +167,21 @@ export function PdfToPngTool() {
               {pageImages.map((img, idx) => (
                 <Card
                   key={idx}
-                  className="border-zinc-800 bg-zinc-950/60 overflow-hidden flex flex-col justify-between"
+                  className="border-border bg-muted/60 overflow-hidden flex flex-col justify-between"
                 >
-                  <div className="p-3 bg-zinc-900/80 border-b border-zinc-800 flex justify-between items-center">
-                    <span className="text-xs font-semibold text-zinc-300">Page {idx + 1}</span>
+                  <div className="p-3 bg-muted/60 border-b border-border flex justify-between items-center">
+                    <span className="text-xs font-semibold text-foreground">Page {idx + 1}</span>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => downloadSingle(img, idx)}
-                      className="h-7 text-xs text-blue-400 hover:text-blue-300"
+                      className="h-7 text-xs text-primary hover:text-primary"
                     >
                       <Download className="w-3.5 h-3.5 mr-1" /> Save PNG
                     </Button>
                   </div>
-                  <div className="p-4 flex items-center justify-center bg-zinc-950 flex-grow">
-                    <img src={img} alt={`Page ${idx + 1}`} className="max-h-72 object-contain rounded shadow" />
+                  <div className="p-4 flex items-center justify-center bg-background flex-grow">
+                    <img src={img} alt={`Page ${idx + 1}`} className="max-h-72 object-contain" />
                   </div>
                 </Card>
               ))}

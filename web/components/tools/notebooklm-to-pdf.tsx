@@ -490,7 +490,7 @@ ${clonedStyles}
               {rendered.html ? (
                 <div
                   ref={paperRef}
-                  className="bg-white shadow-md mx-auto"
+                  className="bg-white mx-auto"
                   style={{ width: `${paperPx}px` }}
                 >
                   <article
@@ -551,7 +551,7 @@ ${clonedStyles}
             </h3>
             <Button variant="outline" size="sm" onClick={copyPrompt}>
               {promptCopied ? (
-                <Check className="w-3.5 h-3.5 mr-1 text-emerald-500" />
+                <Check className="w-3.5 h-3.5 mr-1 text-emerald-600 dark:text-emerald-600 dark:text-emerald-400" />
               ) : (
                 <Copy className="w-3.5 h-3.5 mr-1" />
               )}

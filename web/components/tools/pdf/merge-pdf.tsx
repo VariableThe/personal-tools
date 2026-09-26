@@ -193,24 +193,24 @@ export function MergePdfTool() {
   };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/60 shadow-xl">
+    <Card>
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <Layers className="w-5 h-5 text-blue-400" />
+            <Layers className="w-5 h-5 text-primary" />
             Merge PDF Documents
           </CardTitle>
-          <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10">
+          <Badge variant="outline">
             100% On-Device WASM
           </Badge>
         </div>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-muted-foreground">
           Combine multiple PDF files into a single unified document in any order you choose.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-950/40 text-center">
+        <div className="border-2 border-dashed border-border hover:border-primary/60 rounded-none p-8 transition-all bg-muted/40 text-center">
           <input
             type="file"
             accept=".pdf"
@@ -223,32 +223,32 @@ export function MergePdfTool() {
             htmlFor="merge-upload"
             className="cursor-pointer flex flex-col items-center justify-center space-y-3"
           >
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-none bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
               <Upload className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-base font-semibold text-zinc-200">Select or Drag & Drop PDF Files</p>
-              <p className="text-xs text-zinc-400 mt-1">You can select multiple files at once.</p>
+              <p className="text-base font-semibold text-foreground">Select or Drag & Drop PDF Files</p>
+              <p className="text-xs text-muted-foreground mt-1">You can select multiple files at once.</p>
             </div>
-            <Button variant="default" className="bg-blue-600 hover:bg-blue-500 pointer-events-none">
+            <Button variant="default">
               Choose PDF Files
             </Button>
           </label>
         </div>
 
         {error && (
-          <Alert className="border-red-500/40 bg-red-500/10 text-red-300 text-sm">
+          <Alert variant="destructive">
             {error}
           </Alert>
         )}
 
         {files.length > 0 && (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <span>
                 Selected Files ({files.length})
                 {pagesKnown && (
-                  <span className="ml-2 normal-case font-mono text-zinc-500">
+                  <span className="ml-2 normal-case font-mono text-muted-foreground">
                     • {totalPages} {totalPages === 1 ? "page" : "pages"} total
                   </span>
                 )}
@@ -257,7 +257,7 @@ export function MergePdfTool() {
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mr-1">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mr-1">
                 Sort:
               </span>
               <Button
@@ -265,7 +265,7 @@ export function MergePdfTool() {
                 size="sm"
                 onClick={() => sortFiles("name-asc")}
                 title="Sort alphabetically A to Z"
-                className="h-7 text-xs border-zinc-800 text-zinc-400 hover:text-white"
+                className="h-7 text-xs border-border text-muted-foreground hover:text-foreground"
               >
                 <ArrowDownAZ className="w-3.5 h-3.5 mr-1" />
                 A–Z
@@ -275,7 +275,7 @@ export function MergePdfTool() {
                 size="sm"
                 onClick={() => sortFiles("name-desc")}
                 title="Sort alphabetically Z to A"
-                className="h-7 text-xs border-zinc-800 text-zinc-400 hover:text-white"
+                className="h-7 text-xs border-border text-muted-foreground hover:text-foreground"
               >
                 <ArrowDownZA className="w-3.5 h-3.5 mr-1" />
                 Z–A
@@ -285,7 +285,7 @@ export function MergePdfTool() {
                 size="sm"
                 onClick={() => sortFiles("size-asc")}
                 title="Sort by file size, smallest first"
-                className="h-7 text-xs border-zinc-800 text-zinc-400 hover:text-white"
+                className="h-7 text-xs border-border text-muted-foreground hover:text-foreground"
               >
                 <ArrowUpNarrowWide className="w-3.5 h-3.5 mr-1" />
                 Smallest
@@ -295,7 +295,7 @@ export function MergePdfTool() {
                 size="sm"
                 onClick={() => sortFiles("size-desc")}
                 title="Sort by file size, largest first"
-                className="h-7 text-xs border-zinc-800 text-zinc-400 hover:text-white"
+                className="h-7 text-xs border-border text-muted-foreground hover:text-foreground"
               >
                 <ArrowDownWideNarrow className="w-3.5 h-3.5 mr-1" />
                 Largest
@@ -311,27 +311,27 @@ export function MergePdfTool() {
                   onDragOver={(e) => handleDragOver(e, idx)}
                   onDrop={(e) => handleDrop(e, idx)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center justify-between p-3.5 rounded-xl bg-zinc-950/80 border transition-all cursor-grab active:cursor-grabbing ${
+                  className={`flex items-center justify-between p-3.5 rounded-none bg-muted/60 border transition-all cursor-grab active:cursor-grabbing ${
                     dragOverIndex === idx && dragIndex !== null && dragIndex !== idx
-                      ? "border-blue-500 border-t-2 -translate-y-px"
-                      : "border-zinc-800 hover:border-zinc-700"
+                      ? "border-primary border-t-2 -translate-y-px"
+                      : "border-border hover:border-foreground/30"
                   } ${dragIndex === idx ? "opacity-50" : ""}`}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
-                    <GripVertical className="w-4 h-4 text-zinc-600 flex-shrink-0" />
-                    <span className="w-6 h-6 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400 flex-shrink-0">
+                    <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="w-6 h-6 rounded-none bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground flex-shrink-0">
                       {idx + 1}
                     </span>
-                    <FileText className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <FileText className="w-4 h-4 text-destructive flex-shrink-0" />
                     <div className="truncate">
-                      <p className="text-sm font-medium text-zinc-200 truncate">{item.name}</p>
-                      <p className="text-[11px] text-zinc-500 font-mono">
+                      <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono">
                         {formatBytes(item.size)}
-                        <span className="mx-1.5 text-zinc-700">•</span>
+                        <span className="mx-1.5 text-muted-foreground">•</span>
                         {item.pageCount === null ? (
-                          <span className="text-zinc-600">counting pages…</span>
+                          <span className="text-muted-foreground">counting pages…</span>
                         ) : (
-                          <span className="text-blue-400/90">
+                          <span className="text-primary">
                             {item.pageCount} {item.pageCount === 1 ? "page" : "pages"}
                           </span>
                         )}
@@ -345,7 +345,7 @@ export function MergePdfTool() {
                       size="icon"
                       disabled={idx === 0}
                       onClick={() => moveUp(idx)}
-                      className="h-8 w-8 text-zinc-400 hover:text-white"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
                     >
                       <ArrowUp className="w-4 h-4" />
                     </Button>
@@ -354,7 +354,7 @@ export function MergePdfTool() {
                       size="icon"
                       disabled={idx === files.length - 1}
                       onClick={() => moveDown(idx)}
-                      className="h-8 w-8 text-zinc-400 hover:text-white"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
                     >
                       <ArrowDown className="w-4 h-4" />
                     </Button>
@@ -362,7 +362,7 @@ export function MergePdfTool() {
                       variant="ghost"
                       size="icon"
                       onClick={() => removeFile(item.id)}
-                      className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -371,7 +371,7 @@ export function MergePdfTool() {
               ))}
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-zinc-800">
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-border">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -379,14 +379,14 @@ export function MergePdfTool() {
                   setMergedUrl(null);
                   setMergedInfo(null);
                 }}
-                className="border-zinc-800 text-zinc-400 hover:text-white"
+                className="border-border text-muted-foreground hover:text-foreground"
               >
                 Clear All
               </Button>
               <Button
                 onClick={handleMerge}
                 disabled={processing || files.length < 2}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 shadow-lg shadow-blue-600/20"
+                className="bg-primary hover:bg-primary/80 text-primary-foreground font-medium px-6"
               >
                 {processing ? "Merging PDFs..." : `Merge ${files.length} PDFs Now`}
               </Button>
@@ -395,12 +395,12 @@ export function MergePdfTool() {
         )}
 
         {mergedUrl && (
-          <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+          <div className="p-4 rounded-none bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in duration-300">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
               <div>
-                <h4 className="text-sm font-semibold text-emerald-300">PDFs Merged Successfully!</h4>
-                <p className="text-xs text-zinc-400">
+                <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">PDFs Merged Successfully!</h4>
+                <p className="text-xs text-muted-foreground">
                   Combined {files.length} files
                   {mergedInfo && (
                     <>
@@ -416,7 +416,7 @@ export function MergePdfTool() {
             <a
               href={mergedUrl}
               download="merged_document.pdf"
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm shadow-lg shadow-emerald-600/20 transition-all"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/80 text-primary-foreground rounded-none font-medium text-sm transition-all"
             >
               <Download className="w-4 h-4" />
               Download Merged PDF

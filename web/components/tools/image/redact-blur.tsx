@@ -129,25 +129,25 @@ export function RedactBlurTool() {
   };
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/60 shadow-xl">
+    <Card>
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <EyeOff className="w-5 h-5 text-blue-400" />
+            <EyeOff className="w-5 h-5 text-primary" />
             Redact & Blur Sensitive Info
           </CardTitle>
-          <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10">
+          <Badge variant="outline">
             100% On-Device Canvas
           </Badge>
         </div>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-muted-foreground">
           Click and drag boxes across faces, passwords, or personal data to pixelate them before sharing.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
         {!imageSrc ? (
-          <div className="border-2 border-dashed border-zinc-700/60 hover:border-blue-500/80 rounded-2xl p-8 transition-all bg-zinc-950/40 text-center">
+          <div className="border-2 border-dashed border-border hover:border-primary/60 rounded-none p-8 transition-all bg-muted/40 text-center">
             <input
               type="file"
               accept="image/*"
@@ -159,23 +159,23 @@ export function RedactBlurTool() {
               htmlFor="redact-upload"
               className="cursor-pointer flex flex-col items-center justify-center space-y-3"
             >
-              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-none bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                 <Upload className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-base font-semibold text-zinc-200">Select an Image to Redact</p>
+                <p className="text-base font-semibold text-foreground">Select an Image to Redact</p>
               </div>
-              <Button variant="default" className="bg-blue-600 hover:bg-blue-500 pointer-events-none">
+              <Button variant="default">
                 Choose Image
               </Button>
             </label>
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800">
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-none bg-muted/60 border border-border">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 w-48">
-                  <span className="text-xs font-semibold text-zinc-400 whitespace-nowrap">Pixel Size:</span>
+                  <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Pixel Size:</span>
                   <Slider value={blurAmount} onValueChange={setBlurAmount} min={6} max={40} step={2} />
                 </div>
                 <Button
@@ -183,12 +183,12 @@ export function RedactBlurTool() {
                   size="sm"
                   disabled={boxes.length === 0}
                   onClick={() => setBoxes((prev) => prev.slice(0, -1))}
-                  className="border-zinc-800 text-zinc-300"
+                  className="border-border text-foreground"
                 >
                   <Undo2 className="w-3.5 h-3.5 mr-1.5" /> Undo Last Blur ({boxes.length})
                 </Button>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setImageSrc(null)} className="text-zinc-400">
+              <Button variant="ghost" size="sm" onClick={() => setImageSrc(null)} className="text-muted-foreground">
                 Change Image
               </Button>
             </div>
@@ -197,27 +197,27 @@ export function RedactBlurTool() {
               <span className="text-xs font-semibold uppercase tracking-wider text-purple-400 block text-center animate-pulse">
                 Click & Drag rectangles over sensitive areas below to pixelate
               </span>
-              <div className="border border-zinc-800 rounded-2xl p-2 bg-zinc-950 flex items-center justify-center min-h-[350px] cursor-crosshair">
+              <div className="border border-border rounded-none p-2 bg-background flex items-center justify-center min-h-[350px] cursor-crosshair">
                 <canvas
                   ref={canvasRef}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
-                  className="max-h-[500px] max-w-full object-contain rounded shadow"
+                  className="max-h-[500px] max-w-full object-contain"
                 />
               </div>
             </div>
 
             {outputUrl && (
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+              <div className="p-4 rounded-none bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-                  <span className="text-sm font-semibold text-emerald-300">Redacted Image Ready!</span>
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Redacted Image Ready!</span>
                 </div>
                 <a
                   href={outputUrl}
                   download={`${file?.name.replace(/\.[^/.]+$/, "")}_redacted.png`}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-sm shadow-lg shadow-emerald-600/20"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/80 text-primary-foreground rounded-none font-medium text-sm"
                 >
                   <Download className="w-4 h-4" /> Download Redacted Image
                 </a>
