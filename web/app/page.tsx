@@ -293,6 +293,9 @@ export default function Home() {
           value={category}
           onValueChange={(cat) => selectTool(cat, shownTool(cat))}
           className="w-full space-y-6"
+          // Favorites (localStorage) and ?tool= deep links intentionally
+          // differ between SSR and first client paint; client wins.
+          suppressHydrationWarning
         >
           <div className="space-y-2">
             <div className="relative w-full sm:w-72 sm:ml-auto">
