@@ -12,60 +12,26 @@
 export const NOTEBOOKLM_PROMPT_TITLE = "Exam revision notes prompt for NotebookLM";
 
 export const NOTEBOOKLM_PROMPT_HINT =
-  "Fill in the [BRACKETS], paste into NotebookLM alongside your sources, then paste its Markdown output into this converter.";
+  "Copy the prompt, paste into NotebookLM alongside your sources, then paste its Markdown output into this converter.";
 
-export const NOTEBOOKLM_PROMPT_TEMPLATE = `Using ALL uploaded sources, respond with comprehensive exam revision notes for [SUBJECT], covering [SCOPE — e.g. Module 1 up to and including Topic X].
+export const NOTEBOOKLM_PROMPT_TEMPLATE = `Using the uploaded lecture notes/slides as the primary source, create comprehensive and well-structured exam revision notes for the given subject and scope.
 
-This is NOT a report. Do NOT use a report/document format. I want the actual notes directly in your response as raw Markdown that I can copy-paste into Obsidian.
+Focus on actually explaining and teaching the concepts clearly rather than simply summarizing or transcribing the slides. Preserve important theoretical explanations, terminology, algorithms, equations, examples, and other examinable details. Use the textbooks only as light supporting reference where they help clarify the lecture material; do not expand beyond the syllabus covered by the lecture sources.
 
-Cover the full content of the sources without excessively compressing it. Remove repetition and fluff, but retain important concepts, terminology, architectures, algorithms, equations, examples and examinable details.
+Organize the notes logically by topic and give concepts enough explanation to be properly understood. Include important formulas, algorithms, numerical procedures, examples, comparisons, and exam-relevant points where appropriate. Do not unnecessarily compress important material or add irrelevant information.
 
-Give particular attention to these numerical and algorithmic topics:
-- [PRIORITY TOPIC 1]
-- [PRIORITY TOPIC 2]
-- [PRIORITY TOPIC 3]
+Output ONLY the notes as raw Markdown suitable for directly copying into Obsidian.
 
-For each topic, include:
-- Concepts and terminology
-- Working / architecture
-- Algorithms
-- Important equations
-- Numerical-solving procedure
-- Relevant examples
-- Important exam points and common mistakes
+Formatting requirements:
+- Use \`#\`, \`##\`, \`###\` headings
+- Use bullets and numbered lists where appropriate
+- Use \`**bold**\` for important terms
+- Use Markdown tables when useful
+- Use \`$...$\` for inline mathematics
+- Use \`$$...$$\` for block mathematics
+- Do not use Unicode math instead of LaTeX
+- Do not write LaTeX outside math delimiters
+- Keep block equations on separate lines
+- Do not use HTML or ASCII-art diagrams
 
-[OPTIONAL: Use my handwritten / extra notes (e.g. "[NOTEBOOK NAME]") as a source too.]
-
-At the end, include:
-1. Formula book
-2. Algorithm cheat sheet
-3. Important exam questions with answers
-4. Numerical practice with solutions
-5. Last-minute cheat sheet
-6. Final exam checklist
-
-### CRITICAL FORMATTING REQUIREMENTS
-
-Output ONLY the Markdown notes. No introduction, explanation, preamble, or closing commentary.
-
-Use proper Obsidian-compatible Markdown:
-- \`#\`, \`##\`, \`###\` headings
-- \`-\` / \`*\` bullet lists
-- numbered lists
-- Markdown tables where useful
-- \`**bold**\` for important terms
-- \`>\` for important notes/warnings
-- \`$...$\` for ALL inline mathematical expressions
-- \`$$...$$\` for ALL displayed/block equations
-
-Do NOT use Unicode math in place of LaTeX.
-Do NOT write LaTeX outside \`$...$\` or \`$$...$$\`.
-Keep equations in standard MathJax/LaTeX syntax compatible with Obsidian.
-Use \\frac{a}{b} for fractions and braces for multi-character sub/superscripts (x_{ij}).
-Put each display equation on its own line, surrounded by blank lines.
-Tables MUST use valid GitHub-Flavored Markdown with a header row and | --- | separator row.
-Do not use HTML tags or ASCII-art diagrams.
-
-Preserve the terminology and approach used in the uploaded lecture material. Do not add unrelated textbook material or invent information not supported by the sources.
-
-The goal is not to produce the shortest possible summary. The goal is to produce proper, comprehensive study notes that can serve as my primary revision material.`;
+The final result should be comprehensive enough to serve as primary revision notes while remaining clear, readable, and well organized.`;
