@@ -25,12 +25,32 @@ Do not force this structure when it does not make sense for a particular topic. 
 
 Also examine the uploaded sources for **previous-year question papers (PYQs)** and use them to understand the style, depth, and types of questions asked.
 
-At the end, include a **Questions for Practice** section:
-- If PYQs are available, include relevant questions directly from the PYQs and clearly identify them as previous-year questions.
-- Then create additional original questions following similar concepts, difficulty, style, and reasoning patterns.
-- If no PYQs are available, create original exam-style questions based on the lecture material.
-- Include conceptual, theoretical, algorithmic, and numerical questions where appropriate.
-- Never present an original question as a PYQ.
+At the end, include a **PYQ-Based Practice Questions** section as follows.
+
+First, filter by syllabus: the PYQs may cover a larger syllabus than the current one, so use the uploaded lecture material / current syllabus as the authority. Only extract actual PYQ questions relevant to the current syllabus and ignore questions from portions not currently included. If a PYQ has multiple parts and only some belong to the current syllabus, extract only the relevant parts. Do not include out-of-syllabus questions merely because they appear frequently in the PYQs.
+
+Then analyze the relevant PYQs to identify:
+- Recurring topics and concepts
+- Types and formats of questions asked
+- The level of conceptual understanding expected
+- Common numerical or algorithmic problem patterns
+- The way questions are phrased and structured
+
+Finally, write the section with two parts:
+
+1. **Relevant Previous-Year Questions**
+   - Include the actual questions from the PYQs that fall within the current syllabus.
+   - Preserve their original meaning and wording as much as possible.
+   - Identify the year/paper when available.
+
+2. **Generated Practice Questions**
+   - Create new questions based on the patterns found in the relevant PYQs.
+   - Keep them within the current syllabus only.
+   - Match the style, difficulty, concepts, and reasoning required by the existing PYQs.
+   - Include a reasonable mix of conceptual, theoretical, algorithmic, and numerical questions where appropriate.
+   - Do not simply reword the PYQs; create genuinely new but comparable questions.
+   - If no PYQs are available, create original exam-style questions based on the lecture material.
+   - Clearly distinguish actual PYQs from generated questions. Never present a generated question as a PYQ.
 
 Output ONLY the notes as raw Markdown suitable for directly copying into Obsidian.
 
