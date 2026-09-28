@@ -17,6 +17,7 @@ import {
   Code,
   FolderKanban,
   Image as ImageIcon,
+  Presentation,
   Zap,
   Mic,
   Search,
@@ -34,6 +35,7 @@ import { PageNumbersPdfTool } from "@/components/tools/pdf/page-numbers-pdf";
 import { ImagesToPdfTool } from "@/components/tools/pdf/images-to-pdf";
 import { PdfToPngTool } from "@/components/tools/pdf-to-png";
 import { NotebookLmToPdfTool } from "@/components/tools/notebooklm-to-pdf";
+import { PptMergeTool } from "@/components/tools/ppt/ppt-merge";
 
 import { ImageResizerTool } from "@/components/tools/image-resizer";
 import { CropImageTool } from "@/components/tools/image/crop-image";
@@ -69,6 +71,7 @@ const CATEGORIES: Record<string, { label: string; icon: LucideIcon; tools: ToolD
       { id: "img-to-pdf", label: "JPG to PDF", icon: FileImage },
       { id: "pdf-to-png", label: "PDF to PNG", icon: ImageIcon },
       { id: "notebooklm", label: "Notes to PDF", icon: BookOpenText },
+      { id: "pptx", label: "PPT Merge & PDF", icon: Presentation },
     ],
   },
   image: {
@@ -354,6 +357,7 @@ export default function Home() {
               {shownTool("pdf") === "img-to-pdf" && <ImagesToPdfTool />}
               {shownTool("pdf") === "pdf-to-png" && <PdfToPngTool />}
               {shownTool("pdf") === "notebooklm" && <NotebookLmToPdfTool />}
+              {shownTool("pdf") === "pptx" && <PptMergeTool />}
             </div>
           </TabsContent>
 
