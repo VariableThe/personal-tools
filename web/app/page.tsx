@@ -71,7 +71,7 @@ const CATEGORIES: Record<string, { label: string; icon: LucideIcon; tools: ToolD
       { id: "img-to-pdf", label: "JPG to PDF", icon: FileImage },
       { id: "pdf-to-png", label: "PDF to PNG", icon: ImageIcon },
       { id: "notebooklm", label: "Notes to PDF", icon: BookOpenText },
-      { id: "pptx", label: "PPT Merge", icon: Presentation },
+      { id: "pptx", label: "PPT Merge & PDF", icon: Presentation },
     ],
   },
   image: {
