@@ -78,6 +78,25 @@ const NLM_DOC_CSS = `
 .nlm-doc .nlm-render-error { background: #fde8e8; border: 1px solid #e11d48; color: #9f1239; padding: 8px; }
 `;
 
+/** Compact density: same text width (so fit-to-width guarantees hold),
+ *  but smaller type and tighter spacing for the fewest pages. */
+const NLM_DOC_COMPACT_CSS = `
+.nlm-doc { font-size: 10pt; line-height: 1.45; }
+.nlm-doc h1 { font-size: 17pt; margin: 0 0 8px; padding-bottom: 4px; }
+.nlm-doc h2 { font-size: 13pt; margin: 16px 0 6px; padding-bottom: 3px; }
+.nlm-doc h3 { font-size: 11.5pt; margin: 13px 0 4px; }
+.nlm-doc h4, .nlm-doc h5, .nlm-doc h6 { margin: 10px 0 3px; }
+.nlm-doc p { margin: 6px 0; }
+.nlm-doc ul, .nlm-doc ol { margin: 6px 0; padding-left: 24px; }
+.nlm-doc li { margin: 2px 0; }
+.nlm-doc blockquote { margin: 8px 0; padding: 6px 12px; }
+.nlm-doc table { margin: 9px 0; font-size: 9.5pt; }
+.nlm-doc th, .nlm-doc td { padding: 4px 6px; }
+.nlm-doc pre { padding: 9px; font-size: 9pt; }
+.nlm-doc hr { margin: 13px 0; }
+.nlm-doc .nlm-display { margin: 9px 0; }
+`;
+
 /** Extra rules applied only when printing (break control; page geometry is injected per settings). */
 const NLM_PRINT_CSS = `
 body { background: #fff !important; }
@@ -124,6 +143,8 @@ export function NotebookLmToPdfTool() {
   const [pageSize, setPageSize] = useState<PageSizeId>("A4");
   const [orientation, setOrientation] = useState<OrientationId>("portrait");
   const [margins, setMargins] = useState<MarginId>("normal");
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
+  const compact = density === "compact";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
@@ -274,7 +295,7 @@ export function NotebookLmToPdfTool() {
 <meta charset="utf-8" />
 <title>${escapeHtmlAttr(pdfName)}</title>
 ${clonedStyles}
-<style>${NLM_DOC_CSS}\n${buildPageCss(pageSize, orientation, margins)}\n${NLM_PRINT_CSS}</style>
+<style>${NLM_DOC_CSS}\n${compact ? NLM_DOC_COMPACT_CSS : ""}\n${buildPageCss(pageSize, orientation, margins)}\n${NLM_PRINT_CSS}</style>
 </head>
 <body>
 <h1 class="nlm-print-title">${escapeHtml(docTitle)}</h1>
@@ -344,7 +365,7 @@ ${clonedStyles}
 
       <CardContent className="space-y-6">
         {/* Keep paper styles in the document so the print iframe can clone them. */}
-        <style>{NLM_DOC_CSS}</style>
+        <style>{`${NLM_DOC_CSS}${compact ? NLM_DOC_COMPACT_CSS : ""}`}</style>
 
         {/* ---- inputs ---- */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -477,9 +498,22 @@ ${clonedStyles}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-widest">Density</Label>
+                <Select value={density} onValueChange={(v) => setDensity(v as "comfortable" | "compact")}>
+                  <SelectTrigger size="sm" className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="comfortable">Comfortable</SelectItem>
+                    <SelectItem value="compact">Compact</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <p className="text-[11px] text-muted-foreground font-mono pb-1.5 ml-auto">
                 {contentWidthMm(pageSize, orientation, margins).toFixed(0)} mm text width
                 {orientation === "landscape" ? " · best for wide tables" : ""}
+                {compact ? " · compact: fewest pages, fit-to-width still enforced" : ""}
               </p>
             </div>
             <div
