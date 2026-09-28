@@ -320,6 +320,59 @@ interface LineBit {
   color: { r: number; g: number; b: number };
 }
 
+/** pdf-lib's standard fonts only cover WinAnsi. Map common Unicode
+ *  punctuation to ASCII so real-world slide text (smart quotes, dashes,
+ *  bullets, nbsp, tabs) can never throw "WinAnsi cannot encode". */
+const PDF_TEXT_MAP: Record<string, string> = {
+  "\t": " ",
+  " ": " ",
+  "‘": "'",
+  "’": "'",
+  "‚": "'",
+  "“": '"',
+  "”": '"',
+  "„": '"',
+  "–": "-",
+  "—": "-",
+  "−": "-",
+  "…": "...",
+  "•": "-",
+  "·": "-",
+  "▪": "-",
+  "■": "-",
+  "←": "<-",
+  "↑": "^",
+  "→": "->",
+  "↓": "v",
+  "↔": "<->",
+  "⇒": "=>",
+  "€": "EUR",
+  "™": "(TM)",
+  "✓": "v",
+  "✔": "v",
+  "✗": "x",
+  "✘": "x",
+};
+
+export function sanitizePdfText(s: string): string {
+  let out = "";
+  for (const ch of s) {
+    if (ch === "\n") {
+      out += ch;
+      continue;
+    }
+    const mapped = PDF_TEXT_MAP[ch];
+    if (mapped !== undefined) {
+      out += mapped;
+      continue;
+    }
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 0x20 || code === 0x7f) continue; // C0 controls / DEL
+    out += code <= 0xff ? ch : "?";
+  }
+  return out;
+}
+
 /** Wrap a paragraph into lines of (text, font, size) bits within maxWidth. */
 async function wrapParagraph(
   pdf: PDFDocument,
@@ -330,7 +383,9 @@ async function wrapParagraph(
   for (const run of para.runs) {
     const font = await getFont(pdf, run.bold, run.italic);
     const size = Math.min(72, Math.max(6, run.sizePt));
-    for (const chunk of run.text.split("\n")) {
+    // Sanitize first: widthOfTextAtSize and drawText both throw on
+    // characters outside WinAnsi (tabs, smart quotes, emoji, CJK, ...).
+    for (const chunk of sanitizePdfText(run.text).split("\n")) {
       for (const word of chunk.split(/(\s+)/)) {
         if (!word) continue;
         bits.push({
