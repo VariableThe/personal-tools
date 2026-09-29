@@ -14,56 +14,62 @@ export const NOTEBOOKLM_PROMPT_TITLE = "Exam revision notes prompt for NotebookL
 export const NOTEBOOKLM_PROMPT_HINT =
   "Copy the prompt, paste into NotebookLM alongside your sources, then paste its Markdown output into this converter.";
 
-export const NOTEBOOKLM_PROMPT_TEMPLATE = `Using the uploaded lecture notes/slides as the primary source, create comprehensive and well-structured exam revision notes for the given subject and scope.
+export const NOTEBOOKLM_PROMPT_TEMPLATE = `Using the uploaded lecture notes/slides as the **primary source**, create comprehensive, well-structured **exam revision notes** for the given subject and syllabus scope.
 
-Focus on actually explaining and teaching the concepts clearly rather than simply summarizing or transcribing the slides. Preserve important theory, terminology, algorithms, equations, examples, and examinable details. Use textbooks only as light supporting reference where they help clarify the lecture material.
+Focus on **teaching and explaining the concepts**, not simply summarizing or transcribing the slides. Preserve important theory, terminology, algorithms, equations, examples, derivations, and other examinable details. Use textbooks only as light supporting references when they help clarify the lecture material.
 
-Organize the notes in a logical learning flow. Generally, move from:
-**concept/definition → intuition and purpose → detailed explanation → working/process → equations or algorithms where relevant → examples/numericals → important observations or exam points.**
+Organize the notes in a **logical learning flow**, but **do not force every topic into the same structure**. Adapt the structure to the nature of the topic. For example, a theoretical topic may need a detailed conceptual explanation, while an algorithm may need steps, intuition, complexity, and an example, and a numerical topic may need formulas and worked problems.
 
-Do not force this structure when it does not make sense for a particular topic. Give more explanation to important or difficult concepts and avoid unnecessary detail for simple ones.
+Use concepts such as:
 
-Also examine the uploaded sources for **previous-year question papers (PYQs)** and use them to understand the style, depth, and types of questions asked.
+* Definitions and terminology
+* Intuition and purpose
+* Detailed theory and explanations
+* Processes, mechanisms, or algorithms
+* Equations, derivations, and numericals
+* Examples and applications
+* Comparisons, properties, assumptions, advantages, limitations, and exam points
 
-At the end, include a **PYQ-Based Practice Questions** section as follows.
+These are **guidelines, not a mandatory template**. Give difficult or important concepts enough depth, and keep simple material concise. **Do not omit important details just because they don't fit a particular structure.** The notes should be detailed enough to study from without constantly referring back to the slides.
 
-First, filter by syllabus: the PYQs may cover a larger syllabus than the current one, so use the uploaded lecture material / current syllabus as the authority. Only extract actual PYQ questions relevant to the current syllabus and ignore questions from portions not currently included. If a PYQ has multiple parts and only some belong to the current syllabus, extract only the relevant parts. Do not include out-of-syllabus questions merely because they appear frequently in the PYQs.
+## PYQ Analysis
 
-Then analyze the relevant PYQs to identify:
-- Recurring topics and concepts
-- Types and formats of questions asked
-- The level of conceptual understanding expected
-- Common numerical or algorithmic problem patterns
-- The way questions are phrased and structured
+Examine the uploaded sources for **previous-year question papers** and use them to understand the style, depth, and types of questions asked.
 
-Finally, write the section with two parts:
+First filter the PYQs according to the **current syllabus**, using the lecture material/current syllabus as the authority. Ignore out-of-syllabus questions. If only part of a multi-part question is relevant, include only that part.
 
-1. **Relevant Previous-Year Questions**
-   - Include the actual questions from the PYQs that fall within the current syllabus.
-   - Preserve their original meaning and wording as much as possible.
-   - Identify the year/paper when available.
+Analyze the relevant PYQs for:
 
-2. **Generated Practice Questions**
-   - Create new questions based on the patterns found in the relevant PYQs.
-   - Keep them within the current syllabus only.
-   - Match the style, difficulty, concepts, and reasoning required by the existing PYQs.
-   - Include a reasonable mix of conceptual, theoretical, algorithmic, and numerical questions where appropriate.
-   - Do not simply reword the PYQs; create genuinely new but comparable questions.
-   - If no PYQs are available, create original exam-style questions based on the lecture material.
-   - Clearly distinguish actual PYQs from generated questions. Never present a generated question as a PYQ.
+* Recurring topics and concepts
+* Question formats and phrasing
+* Expected conceptual depth
+* Numerical/algorithmic patterns
+* Common reasoning or problem-solving requirements
 
-Output ONLY the notes as raw Markdown suitable for directly copying into Obsidian.
+## PYQ-Based Practice Questions
 
-Formatting:
-- Use \`#\`, \`##\`, \`###\` headings
-- Use bullets and numbered lists appropriately
-- Use \`**bold**\` for important terms
-- Use Markdown tables where useful
-- Use \`$...$\` for inline mathematics
-- Use \`$$...$$\` for block mathematics
-- Do not use Unicode math instead of LaTeX
-- Do not write LaTeX outside math delimiters
-- Keep block equations on separate lines
-- Do not use HTML or ASCII-art diagrams
+### 1. Relevant Previous-Year Questions
 
-The final notes should be comprehensive, conceptually clear, logically organized, and useful as primary revision material rather than an overly compressed summary.`;
+Include the **actual PYQ questions** that fall within the current syllabus. Preserve their wording and meaning as closely as possible and identify the year/paper when available.
+
+### 2. Generated Practice Questions
+
+Create **new questions** based on the patterns found in the relevant PYQs. Keep them strictly within the current syllabus and match their style, difficulty, depth, and reasoning requirements. Include an appropriate mix of conceptual, theoretical, algorithmic, and numerical questions where relevant.
+
+Clearly distinguish actual PYQs from generated questions. **Never present a generated question as a PYQ.**
+
+## Formatting
+
+* Use \`#\`, \`##\`, \`###\` headings
+* Use bullets and numbered lists appropriately
+* Use \`**bold**\` for important terms
+* Use Markdown tables where useful
+* Use \`$...$\` for inline mathematics
+* Use \`$$...$$\` for block mathematics
+* Keep block equations on separate lines
+* Do not use Unicode math instead of LaTeX
+* Do not use HTML or ASCII-art diagrams
+
+**Prioritize clarity, completeness, and conceptual understanding over rigid structure or excessive summarization.**
+
+Output **only the notes as raw Markdown suitable for directly copying into Obsidian**.`;
