@@ -9,7 +9,8 @@
  */
 
 import JSZip from "jszip";
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, rgb, type PDFFont } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import { parseXml, findAll, child, children, type XmlNode } from "./pptx-xml";
 import { resolvePart, relsPathFor } from "./pptx-merge";
 
@@ -296,20 +297,44 @@ export async function extractDeckContent(data: ArrayBuffer | Uint8Array): Promis
   return out;
 }
 
-const loadedFonts = new WeakMap<PDFDocument, Record<string, PDFFont>>();
+/**
+ * Embedded-subset-font technique (as used by pptx-to-pdf et al): pdf-lib's
+ * built-in standard fonts only cover WinAnsi and throw on tabs, smart
+ * quotes, emoji, CJK and friends. Embedding DejaVu Sans (subset automatically
+ * by pdf-lib) renders all of that directly — no lossy ASCII mapping.
+ * Fonts are fetched once per session from /public/fonts and embedded per
+ * document. Italic falls back to regular (no oblique file bundled).
+ */
+let cachedFontBytes: { regular: Uint8Array; bold: Uint8Array } | null = null;
 
-async function getFont(pdf: PDFDocument, bold: boolean, italic: boolean): Promise<PDFFont> {
-  let entry = loadedFonts.get(pdf);
-  if (!entry) {
-    entry = {
-      regular: await pdf.embedFont(StandardFonts.Helvetica),
-      bold: await pdf.embedFont(StandardFonts.HelveticaBold),
-      italic: await pdf.embedFont(StandardFonts.HelveticaOblique),
-      boldItalic: await pdf.embedFont(StandardFonts.HelveticaBoldOblique),
-    };
-    loadedFonts.set(pdf, entry);
+async function loadFontBytes(): Promise<{ regular: Uint8Array; bold: Uint8Array }> {
+  if (!cachedFontBytes) {
+    const [regular, bold] = await Promise.all(
+      ["/fonts/DejaVuSans.ttf", "/fonts/DejaVuSans-Bold.ttf"].map(async (url) => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Could not load font ${url} (${res.status})`);
+        return new Uint8Array(await res.arrayBuffer());
+      })
+    );
+    cachedFontBytes = { regular, bold };
   }
-  return entry[bold ? (italic ? "boldItalic" : "bold") : italic ? "italic" : "regular"];
+  return cachedFontBytes;
+}
+
+const embeddedFonts = new WeakMap<PDFDocument, { regular: PDFFont; bold: PDFFont }>();
+
+async function getFont(pdf: PDFDocument, bold: boolean): Promise<PDFFont> {
+  let entry = embeddedFonts.get(pdf);
+  if (!entry) {
+    pdf.registerFontkit(fontkit);
+    const bytes = await loadFontBytes();
+    entry = {
+      regular: await pdf.embedFont(bytes.regular),
+      bold: await pdf.embedFont(bytes.bold),
+    };
+    embeddedFonts.set(pdf, entry);
+  }
+  return bold ? entry.bold : entry.regular;
 }
 
 interface LineBit {
@@ -320,57 +345,11 @@ interface LineBit {
   color: { r: number; g: number; b: number };
 }
 
-/** pdf-lib's standard fonts only cover WinAnsi. Map common Unicode
- *  punctuation to ASCII so real-world slide text (smart quotes, dashes,
- *  bullets, nbsp, tabs) can never throw "WinAnsi cannot encode". */
-const PDF_TEXT_MAP: Record<string, string> = {
-  "\t": " ",
-  " ": " ",
-  "‘": "'",
-  "’": "'",
-  "‚": "'",
-  "“": '"',
-  "”": '"',
-  "„": '"',
-  "–": "-",
-  "—": "-",
-  "−": "-",
-  "…": "...",
-  "•": "-",
-  "·": "-",
-  "▪": "-",
-  "■": "-",
-  "←": "<-",
-  "↑": "^",
-  "→": "->",
-  "↓": "v",
-  "↔": "<->",
-  "⇒": "=>",
-  "€": "EUR",
-  "™": "(TM)",
-  "✓": "v",
-  "✔": "v",
-  "✗": "x",
-  "✘": "x",
-};
-
-export function sanitizePdfText(s: string): string {
-  let out = "";
-  for (const ch of s) {
-    if (ch === "\n") {
-      out += ch;
-      continue;
-    }
-    const mapped = PDF_TEXT_MAP[ch];
-    if (mapped !== undefined) {
-      out += mapped;
-      continue;
-    }
-    const code = ch.codePointAt(0) ?? 0;
-    if (code < 0x20 || code === 0x7f) continue; // C0 controls / DEL
-    out += code <= 0xff ? ch : "?";
-  }
-  return out;
+/** Strip C0 controls (except \n and \t, which the embedded font renders).
+ *  Everything else passes through untouched — the embedded subset font
+ *  handles Unicode directly instead of lossy ASCII mapping. */
+function stripControls(s: string): string {
+  return s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 }
 
 /** Wrap a paragraph into lines of (text, font, size) bits within maxWidth. */
@@ -381,11 +360,10 @@ async function wrapParagraph(
 ): Promise<{ lines: LineBit[][]; lineHeight: number }> {
   const bits: (LineBit & { para: Paragraph })[] = [];
   for (const run of para.runs) {
-    const font = await getFont(pdf, run.bold, run.italic);
+    const font = await getFont(pdf, run.bold);
     const size = Math.min(72, Math.max(6, run.sizePt));
-    // Sanitize first: widthOfTextAtSize and drawText both throw on
-    // characters outside WinAnsi (tabs, smart quotes, emoji, CJK, ...).
-    for (const chunk of sanitizePdfText(run.text).split("\n")) {
+    // Strip control characters only; the embedded font renders everything else.
+    for (const chunk of stripControls(run.text).split("\n")) {
       for (const word of chunk.split(/(\s+)/)) {
         if (!word) continue;
         bits.push({
@@ -485,7 +463,32 @@ export async function deckContentToPdf(
         }
       };
 
-      for (const shape of slide.shapes) {
+      // Never emit a silently blank page: slides with nothing extractable
+      // (e.g. EMF/WMF-only diagrams, charts) get an explicit placeholder.
+      const placeholder: SlideShape = {
+        kind: "text",
+        x: margin,
+        y: deck.heightPt / 2 - 60,
+        w: deck.widthPt - margin * 2,
+        h: 120,
+        paragraphs: [
+          {
+            align: "center",
+            runs: [
+              {
+                text: `Slide ${idx + 1}: no extractable text or image content (unsupported elements only)`,
+                sizePt: 14,
+                bold: false,
+                italic: true,
+                color: { r: 0.45, g: 0.45, b: 0.45 },
+              },
+            ],
+          },
+        ],
+      };
+      const shapes = slide.shapes.length > 0 ? slide.shapes : [placeholder];
+
+      for (const shape of shapes) {
         const top = deck.heightPt - shape.y; // EMU y-down -> PDF y-up
         if (shape.kind === "text") {
           await drawText(shape.x, top, shape.w, shape.paragraphs);
@@ -565,7 +568,7 @@ export async function deckContentToPdf(
       }
 
       // Footer: slide number.
-      const footerFont = await getFont(pdf, false, false);
+      const footerFont = await getFont(pdf, false);
       page.drawText(`Slide ${idx + 1} of ${deck.slides.length}`, {
         x: deck.widthPt - margin - 110,
         y: 18,

@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { readPptxInfo, mergePptx } from "@/lib/pptx-merge";
-import { extractDeckContent, deckContentToPdf } from "@/lib/pptx-pdf";
 
 interface PptxFileItem {
   id: string;
@@ -41,6 +40,7 @@ interface ExportResult {
   pdfSize: number | null;
   totalSlides: number;
   skippedImages: number;
+  emptySlides: number;
 }
 
 export function PptMergeTool() {
@@ -182,6 +182,7 @@ export function PptMergeTool() {
         pdfSize: result?.pdfSize ?? null,
         totalSlides: files.reduce((s, f) => s + (f.slideCount ?? 0), 0),
         skippedImages: result?.skippedImages ?? 0,
+        emptySlides: result?.emptySlides ?? 0,
       });
     } catch (err) {
       setError("Failed to combine decks: " + (err instanceof Error ? err.message : String(err)));
@@ -196,11 +197,18 @@ export function PptMergeTool() {
     setError(null);
     try {
       // One PDF per deck (preserves each deck's slide size), then join pages in order.
-      const docs: { doc: PDFDocument; skipped: number; slides: number }[] = [];
+      // The export engine (fontkit + embedded fonts) loads on demand only.
+      const { extractDeckContent, deckContentToPdf } = await import("@/lib/pptx-pdf");
+      const docs: { doc: PDFDocument; skipped: number; slides: number; empty: number }[] = [];
       for (const item of files) {
         const deck = await extractDeckContent(await item.file.arrayBuffer());
         const bytes = await deckContentToPdf(deck, { deckName: item.name });
-        docs.push({ doc: await PDFDocument.load(bytes), skipped: deck.skippedImages, slides: deck.slides.length });
+        docs.push({
+          doc: await PDFDocument.load(bytes),
+          skipped: deck.skippedImages,
+          slides: deck.slides.length,
+          empty: deck.slides.filter((s) => s.shapes.length === 0).length,
+        });
       }
       const out = await PDFDocument.create();
       let pages = 0;
@@ -218,6 +226,7 @@ export function PptMergeTool() {
         pdfSize: bytes.length,
         totalSlides: pages,
         skippedImages: docs.reduce((s, d) => s + d.skipped, 0),
+        emptySlides: docs.reduce((s, d) => s + d.empty, 0),
       });
     } catch (err) {
       setError("Failed to build PDF: " + (err instanceof Error ? err.message : String(err)));
@@ -403,6 +412,8 @@ export function PptMergeTool() {
                   {result.totalSlides} {result.totalSlides === 1 ? "slide" : "slides"} in order
                   {result.skippedImages > 0 &&
                     ` · ${result.skippedImages} unsupported image(s) skipped in PDF`}
+                  {result.emptySlides > 0 &&
+                    ` · ${result.emptySlides} slide(s) had no extractable content`}
                 </p>
               </div>
             </div>
