@@ -666,6 +666,18 @@ function unwrapFencedCode(s: string): string {
   return lines.slice(1, -1).join("\n");
 }
 
+/** Render the snippet with raw line numbers; trigger lines get a → marker. */
+function formatNumberedSnippet(snippet: string, startLine: number, triggerLines?: number[]): string {
+  const set = new Set(triggerLines ?? []);
+  return snippet
+    .split("\n")
+    .map((l, k) => {
+      const n = startLine + k;
+      return `${String(n).padStart(4, " ")} ${set.has(n) ? "→" : "│"} ${l}`;
+    })
+    .join("\n");
+}
+
 /** Per-error fix-it box: shows the message + offending snippet, copies a
  *  self-contained repair prompt (one-line instruction + snippet) for an AI,
  *  then swaps the pasted fix directly into the editor. */
@@ -741,8 +753,13 @@ function NlmErrorFixBox({
         AI-fixed snippet below and replace. Pasting the whole ```text block is fine — fences are
         stripped automatically.
       </p>
+      {problem.location && (
+        <p className="text-[11px] font-mono text-muted-foreground">Trigger: {problem.location}</p>
+      )}
       <pre className="whitespace-pre-wrap text-xs leading-relaxed bg-card border border-border p-3 max-h-48 overflow-y-auto">
-        {problem.snippet}
+        {problem.snippetStartLine !== undefined
+          ? formatNumberedSnippet(problem.snippet, problem.snippetStartLine, problem.triggerLines)
+          : problem.snippet}
       </pre>
       <div className="space-y-1.5">
         <Label htmlFor={`nlm-fix-${problem.id}-${index}`} className="text-[11px] uppercase tracking-widest">
