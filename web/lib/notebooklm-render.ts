@@ -43,9 +43,11 @@ export function renderNotebookLmHtml(normalizedMarkdown: string, rawSource?: str
     return `\n\n${DISP_PH}${displaySegs.length - 1}@\n\n`;
   });
 
-  // 2. Pull inline math out ("\$" is a literal dollar, never a delimiter).
+  // 2. Pull inline math out ("\$" is a literal dollar, never a delimiter —
+  // and it may sit INSIDE a pair, so the inner pattern crosses it; same
+  // tolerant shape as the normalizer's extraction).
   const inlineSegs: string[] = [];
-  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)([^$\n]*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (_, inner) => {
+  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)((?:\\\$|[^$\n])*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (_, inner) => {
     inlineSegs.push(String(inner));
     return `${INL_PH}${inlineSegs.length - 1}@`;
   });
