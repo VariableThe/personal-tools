@@ -655,9 +655,20 @@ ${clonedStyles}
   );
 }
 
+/** Strip one surrounding ``` fence (with optional language tag) so a verbatim
+ *  paste of AI output still replaces cleanly. Inner content is kept verbatim. */
+function unwrapFencedCode(s: string): string {
+  const t = s.trim();
+  if (!t.startsWith("```")) return s;
+  const lines = t.split("\n");
+  if (lines.length < 2) return s;
+  if (lines[lines.length - 1].trim() !== "```") return s;
+  return lines.slice(1, -1).join("\n");
+}
+
 /** Per-error fix-it box: shows the message + offending snippet, copies a
  *  self-contained repair prompt (one-line instruction + snippet) for an AI,
- *  then swaps the pasted fix back into the editor on confirm. */
+ *  then swaps the pasted fix directly into the editor. */
 function NlmErrorFixBox({
   problem,
   index,
@@ -693,13 +704,15 @@ function NlmErrorFixBox({
   const unchanged = draft === problem.target || !draft.trim();
 
   const handleReplace = () => {
-    if (unchanged) return;
+    // AI frontends wrap output in fences per the fix prompt — unwrap so a
+    // verbatim paste still swaps cleanly.
+    const replacement = unwrapFencedCode(draft);
+    if (replacement === problem.target || !replacement.trim()) return;
     if (!source.includes(problem.target)) {
       setReplaceNote("Snippet no longer matches the editor — it changed since this error was detected.");
       return;
     }
-    if (!window.confirm("Replace the offending snippet in the editor with your pasted fix?")) return;
-    const ok = onReplace(problem.target, draft);
+    const ok = onReplace(problem.target, replacement);
     setReplaceNote(
       ok
         ? "Replaced in the editor — the error list updates automatically."
@@ -725,7 +738,8 @@ function NlmErrorFixBox({
       </div>
       <p className="text-xs text-muted-foreground">
         Copy the fix prompt, paste it into an AI alongside the included snippet, then paste the
-        AI-fixed snippet below and replace.
+        AI-fixed snippet below and replace. Pasting the whole ```text block is fine — fences are
+        stripped automatically.
       </p>
       <pre className="whitespace-pre-wrap text-xs leading-relaxed bg-card border border-border p-3 max-h-48 overflow-y-auto">
         {problem.snippet}
@@ -739,7 +753,7 @@ function NlmErrorFixBox({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           className="min-h-[120px] font-mono text-xs leading-relaxed"
-          placeholder="Paste the corrected snippet here…"
+          placeholder="Paste the corrected snippet here (```text fences are unwrapped automatically)…"
         />
       </div>
       <div className="flex items-center gap-2 flex-wrap">
