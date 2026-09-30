@@ -34,6 +34,12 @@ export interface NlmFixableProblem {
   fixPrompt: string;
   /** Exact string in the raw input to swap for the pasted fix. */
   target: string;
+  /** 1-based raw line number of the first snippet line (when located). */
+  snippetStartLine?: number;
+  /** 1-based raw lines inside the snippet that hold trigger points. */
+  triggerLines?: number[];
+  /** Human-readable trigger position(s), e.g. "line 42, column 17". */
+  location?: string;
 }
 
 /** One-line repair instruction shared by the normalize + render stages.
@@ -246,45 +252,120 @@ function windowForLines(lines: string[], idx: number, before = 2, after = 2): st
   return lines.slice(start, end).join("\n");
 }
 
-/** First line with an odd count of unescaped single-$ (skips fenced code). -1 if none. */
-function firstOddDollarLine(lines: string[]): number {
-  let inFence = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    const singles = line.match(/(?<!\$)(?<!\\)\$(?!\$)/g) || [];
-    if (singles.length % 2 === 1) return i;
-  }
-  return -1;
+/** A triggering point of an unmatched-delimiter error (1-based line, 0-based column). */
+export interface NlmDollarTrigger {
+  line: number;
+  col: number;
 }
 
-/** First line with an unescaped $$ (skips fenced code). -1 if none. */
-function firstDoubleDollarLine(lines: string[]): number {
-  let inFence = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    if (/(?<!\\)\$\$/.test(line)) return i;
-  }
-  return -1;
-}
+const maskSpaces = (s: string): string => " ".repeat(s.length);
 
-/** Exact raw-lines window around the first suspect $ line. */
-function snippetForUnmatchedDollar(raw: string, kind: "single" | "display"): string {
+/** Locate the ACTUAL leftover $ / $$ delimiters the pipeline counts, by
+ *  replaying its matching semantics line-by-line without moving columns:
+ *  fenced code and inline code are masked out, same-line $$ pairs and
+ *  \(...\) / \[...\] spans are masked (the pipeline converts then extracts
+ *  them, so inner $s can't be leftovers), and multiline $$ regions are
+ *  tracked across lines. Masking uses spaces so trigger columns stay true.
+ *  (Approximations, documented: a \[ opener closed on a later line is treated
+ *  like $$; pathological nesting such as \[a$$b\] may diverge — the global
+ *  error count remains the source of truth.) */
+function locateDollarTriggers(raw: string, kind: "single" | "display"): NlmDollarTrigger[] {
   const lines = splitRawLines(raw);
-  const idx =
-    kind === "display" ? firstDoubleDollarLine(lines) : firstOddDollarLine(lines);
-  if (idx !== -1) return windowForLines(lines, idx);
-  const fb = lines.findIndex((l) => l.includes("$"));
-  return windowForLines(lines, fb === -1 ? 0 : fb);
+  const triggers: NlmDollarTrigger[] = [];
+  // Fresh regexes per call (shared /g state is not re-entrant). The inline
+  // and leftover patterns are exact copies of the pipeline's own.
+  const inlineRe = /(?<!\$)(?<!\\)\$(?!\$|\s)([^$\n]*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g;
+  const leftoverRe = /(?<!\$)(?<!\\)\$(?!\$)/g;
+  const displayPairRe = /\$\$([\s\S]*?)\$\$/g;
+  const escParenRe = /\\\\\(([\s\S]*?)\\\\\)/g;
+  const escBracketRe = /\\\\\[([\s\S]*?)\\\\\]/g;
+  const parenRe = /\\\(([\s\S]*?)\\\)/g;
+  const bracketRe = /\\\[([\s\S]*?)\\\]/g;
+  const danglingDisplayRe = /(?<!\\)\$\$/;
+  let inFence = false;
+  let inDisplay = false;
+  let inBracket = false;
+
+  lines.forEach((rawLine, idx) => {
+    const lineNo = idx + 1;
+    // Fenced code: a line holding 2+ markers is self-contained; 1 toggles.
+    const fenceMarks = rawLine.match(/```|~~~/g) || [];
+    if (fenceMarks.length >= 2) return;
+    if (fenceMarks.length === 1) {
+      inFence = !inFence;
+      return;
+    }
+    if (inFence) return;
+
+    let s = rawLine.replace(/`[^`\n]+`/g, maskSpaces);
+
+    if (inDisplay || inBracket) {
+      const closerRe = inDisplay ? /\$\$/ : /\\\\\]|\\\]/;
+      const cm = closerRe.exec(s);
+      if (!cm) return; // whole line is display math — no triggers here
+      const end = cm.index + cm[0].length;
+      s = maskSpaces(s.slice(0, end)) + s.slice(end);
+      inDisplay = false;
+      inBracket = false;
+    }
+
+    // Bracket-math spans (same line) — see doc comment above.
+    s = s.replace(escParenRe, maskSpaces).replace(parenRe, maskSpaces);
+    s = s.replace(escBracketRe, maskSpaces);
+    s = s.replace(bracketRe, maskSpaces);
+    if (/\\\\\[|\\\[/.test(s)) {
+      const open = s.search(/\\\\\[|\\\[/);
+      s = s.slice(0, open) + maskSpaces(s.slice(open));
+      inBracket = true;
+    }
+
+    // Same-line display pairs can't hold triggers. Pairing uses plain $$
+    // (extraction semantics); trigger recording below is escape-aware
+    // (count semantics), matching the pipeline's leftover count.
+    s = s.replace(displayPairRe, maskSpaces);
+    const dangling = s.search(danglingDisplayRe);
+    if (dangling !== -1) {
+      if (kind === "display") triggers.push({ line: lineNo, col: dangling });
+      s = s.slice(0, dangling) + maskSpaces(s.slice(dangling));
+      inDisplay = true;
+    }
+
+    if (kind === "single") {
+      s = s.replace(inlineRe, maskSpaces);
+      for (const m of s.matchAll(leftoverRe)) {
+        triggers.push({ line: lineNo, col: m.index ?? 0 });
+      }
+    }
+  });
+
+  return triggers;
+}
+
+/** Exact raw-lines window around the first trigger, plus its location info.
+ *  Falls back to the first $-bearing line (never an unrelated region). */
+function snippetForUnmatchedDollar(
+  raw: string,
+  kind: "single" | "display"
+): { snippet: string; startLine?: number; triggerLines?: number[]; location?: string } {
+  const lines = splitRawLines(raw);
+  const triggers = locateDollarTriggers(raw, kind);
+  if (triggers.length === 0) {
+    let fb = lines.findIndex((l) => l.includes("$"));
+    if (fb === -1) fb = 0;
+    return { snippet: windowForLines(lines, fb) };
+  }
+  const first = triggers[0];
+  const start0 = Math.max(0, first.line - 1 - 2);
+  const snippet = windowForLines(lines, first.line - 1);
+  const startLine = start0 + 1;
+  const endLine = startLine + snippet.split("\n").length - 1;
+  const triggerLines = triggers.filter((t) => t.line >= startLine && t.line <= endLine).map((t) => t.line);
+  const shown = triggers
+    .slice(0, 3)
+    .map((t) => `line ${t.line}, column ${t.col + 1}`)
+    .join(" · ");
+  const location = triggers.length > 3 ? `${shown} (+${triggers.length - 3} more)` : shown;
+  return { snippet, startLine, triggerLines, location };
 }
 
 const TEX_STOP = new Set([
@@ -349,13 +430,27 @@ export function snippetForTex(raw: string, tex: string): string {
     const idx = lines.findIndex((l) => l.includes(frag.slice(0, 12)));
     if (idx !== -1) return windowForLines(lines, idx);
   }
-  const d = firstOddDollarLine(lines);
-  return windowForLines(lines, d === -1 ? 0 : d);
+  const fb = locateDollarTriggers(raw, "single");
+  return windowForLines(lines, fb.length > 0 ? fb[0].line - 1 : 0);
 }
 
-function toFixable(id: string, message: string, snippet: string): NlmFixableProblem {
+function toFixable(
+  id: string,
+  message: string,
+  snippet: string,
+  extra?: { startLine?: number; triggerLines?: number[]; location?: string }
+): NlmFixableProblem {
   if (!snippet) snippet = "(could not locate the offending lines — copy the fix prompt and inspect $ delimiters near your latest edit)";
-  return { id, message, snippet, fixPrompt: buildNlmFixPrompt(message), target: snippet };
+  return {
+    id,
+    message,
+    snippet,
+    fixPrompt: buildNlmFixPrompt(message),
+    target: snippet,
+    ...(extra?.startLine !== undefined ? { snippetStartLine: extra.startLine } : {}),
+    ...(extra?.triggerLines !== undefined ? { triggerLines: extra.triggerLines } : {}),
+    ...(extra?.location !== undefined ? { location: extra.location } : {}),
+  };
 }
 
 export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
@@ -432,13 +527,15 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
     const msg =
       `Found ${leftoverDisplay} unmatched "$$" delimiter${leftoverDisplay === 1 ? "" : "s"}. Each display equation needs an opening and closing $$ on its own lines.`;
     errors.push(msg);
-    fixable.push(toFixable("norm-unmatched-display", msg, snippetForUnmatchedDollar(raw, "display")));
+    const loc = snippetForUnmatchedDollar(raw, "display");
+    fixable.push(toFixable("norm-unmatched-display", msg, loc.snippet, loc));
   }
   if (leftoverSingle > 0) {
     const msg =
       `Found ${leftoverSingle} unmatched "$" delimiter${leftoverSingle === 1 ? "" : "s"}. Inline math needs matching $...$ pairs (a lone $ for currency can trigger this — wrap it in backticks like \`$\`).`;
     errors.push(msg);
-    fixable.push(toFixable("norm-unmatched-inline", msg, snippetForUnmatchedDollar(raw, "single")));
+    const loc = snippetForUnmatchedDollar(raw, "single");
+    fixable.push(toFixable("norm-unmatched-inline", msg, loc.snippet, loc));
   }
 
   // 7. Validate each math segment.
