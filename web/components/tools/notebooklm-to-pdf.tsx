@@ -23,7 +23,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { normalizeNotebookLmMarkdown } from "@/lib/notebooklm-latex";
+import { normalizeNotebookLmMarkdown, type NlmFixableProblem } from "@/lib/notebooklm-latex";
 import { renderNotebookLmHtml } from "@/lib/notebooklm-render";
 import { fitNotebookLmContent } from "@/lib/notebooklm-fit";
 import {
@@ -155,13 +155,33 @@ export function NotebookLmToPdfTool() {
 
   const normalized = useMemo(() => normalizeNotebookLmMarkdown(source), [source]);
   const rendered = useMemo(
-    () => (mounted ? renderNotebookLmHtml(normalized.markdown) : { html: "", mathErrors: [] as string[] }),
-    [normalized.markdown, mounted]
+    () =>
+      mounted
+        ? renderNotebookLmHtml(normalized.markdown, source)
+        : { html: "", mathErrors: [] as string[], fixable: [] as NlmFixableProblem[] },
+    [normalized.markdown, mounted, source]
   );
   const allErrors = useMemo(
     () => [...normalized.errors, ...rendered.mathErrors],
     [normalized.errors, rendered.mathErrors]
   );
+  const fixableProblems = useMemo(
+    () => [...normalized.fixable, ...rendered.fixable],
+    [normalized.fixable, rendered.fixable]
+  );
+
+  /** Swap the first occurrence of the offending snippet for the pasted fix. */
+  const applySnippetReplacement = (target: string, replacement: string): boolean => {
+    if (!target || !replacement || target === replacement) return false;
+    let replaced = false;
+    setSource((prev) => {
+      const idx = prev.indexOf(target);
+      if (idx === -1) return prev;
+      replaced = true;
+      return prev.slice(0, idx) + replacement + prev.slice(idx + target.length);
+    });
+    return replaced;
+  };
 
   const wordCount = useMemo(() => (source.trim() ? source.trim().split(/\s+/).length : 0), [source]);
   const headingCount = useMemo(() => (source.match(/^#{1,6}\s+\S/gm) || []).length, [source]);
@@ -572,8 +592,32 @@ ${clonedStyles}
                   <li key={i}>{e}</li>
                 ))}
               </ul>
+              {fixableProblems.length > 0 && (
+                <p className="mt-2 text-xs">
+                  Use a fix-it box below to copy a repair prompt for each problem, then paste the
+                  fix back.
+                </p>
+              )}
             </AlertDescription>
           </Alert>
+        )}
+
+        {/* ---- per-error fix-it boxes ---- */}
+        {fixableProblems.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Fix-it boxes — copy a repair prompt, paste back the fix ({fixableProblems.length})
+            </h3>
+            {fixableProblems.map((problem, i) => (
+              <NlmErrorFixBox
+                key={`${problem.id}-${i}`}
+                problem={problem}
+                index={i}
+                source={source}
+                onReplace={applySnippetReplacement}
+              />
+            ))}
+          </div>
         )}
 
         {/* ---- prompt section ---- */}
@@ -608,6 +652,110 @@ ${clonedStyles}
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+/** Per-error fix-it box: shows the message + offending snippet, copies a
+ *  self-contained repair prompt (one-line instruction + snippet) for an AI,
+ *  then swaps the pasted fix back into the editor on confirm. */
+function NlmErrorFixBox({
+  problem,
+  index,
+  source,
+  onReplace,
+}: {
+  problem: NlmFixableProblem;
+  index: number;
+  source: string;
+  onReplace: (target: string, replacement: string) => boolean;
+}) {
+  const [draft, setDraft] = useState(problem.snippet);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [replaceNote, setReplaceNote] = useState<string | null>(null);
+
+  // Reset the draft whenever a new error (or new snippet) arrives.
+  useEffect(() => {
+    setDraft(problem.snippet);
+    setReplaceNote(null);
+  }, [problem.snippet]);
+
+  const copyFixPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(`${problem.fixPrompt}\n\nSnippet:\n${problem.snippet}`);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    } catch {
+      // clipboard unavailable — user can still select manually
+    }
+  };
+
+  const targetFound = source.includes(problem.target);
+  const unchanged = draft === problem.target || !draft.trim();
+
+  const handleReplace = () => {
+    if (unchanged) return;
+    if (!source.includes(problem.target)) {
+      setReplaceNote("Snippet no longer matches the editor — it changed since this error was detected.");
+      return;
+    }
+    if (!window.confirm("Replace the offending snippet in the editor with your pasted fix?")) return;
+    const ok = onReplace(problem.target, draft);
+    setReplaceNote(
+      ok
+        ? "Replaced in the editor — the error list updates automatically."
+        : "Snippet no longer matches the editor — it changed since this error was detected."
+    );
+  };
+
+  return (
+    <div className="border border-border bg-muted/40 p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h4 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-destructive" />
+          Fix {index + 1}: {problem.message}
+        </h4>
+        <Button variant="outline" size="sm" onClick={copyFixPrompt}>
+          {promptCopied ? (
+            <Check className="w-3.5 h-3.5 mr-1 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <Copy className="w-3.5 h-3.5 mr-1" />
+          )}
+          {promptCopied ? "Copied!" : "Copy fix prompt"}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Copy the fix prompt, paste it into an AI alongside the included snippet, then paste the
+        AI-fixed snippet below and replace.
+      </p>
+      <pre className="whitespace-pre-wrap text-xs leading-relaxed bg-card border border-border p-3 max-h-48 overflow-y-auto">
+        {problem.snippet}
+      </pre>
+      <div className="space-y-1.5">
+        <Label htmlFor={`nlm-fix-${problem.id}-${index}`} className="text-[11px] uppercase tracking-widest">
+          Paste AI-fixed snippet here
+        </Label>
+        <Textarea
+          id={`nlm-fix-${problem.id}-${index}`}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="min-h-[120px] font-mono text-xs leading-relaxed"
+          placeholder="Paste the corrected snippet here…"
+        />
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" onClick={handleReplace} disabled={unchanged || !targetFound}>
+          <Check className="w-3.5 h-3.5 mr-1" />
+          Replace snippet
+        </Button>
+        {!targetFound && (
+          <span className="text-[11px] text-muted-foreground font-mono">
+            Waiting for the editor to contain this snippet…
+          </span>
+        )}
+        {replaceNote && <span className="text-[11px] text-muted-foreground font-mono">{replaceNote}</span>}
+        <span className="text-[11px] text-muted-foreground font-mono ml-auto">Replaces the first match</span>
+      </div>
+    </div>
   );
 }
 
