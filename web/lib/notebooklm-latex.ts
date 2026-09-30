@@ -13,10 +13,32 @@ export interface NormalizeResult {
   warnings: string[];
   /** Blocking problems (unbalanced delimiters, bad LaTeX). */
   errors: string[];
+  /** Same blocking problems packaged with the offending snippet + a
+   *  one-line repair prompt for the per-error fix-it boxes. */
+  fixable: NlmFixableProblem[];
   /** Counts used for the stats row. */
   mathCounts: { inline: number; display: number };
   /** True when a ```mermaid block was found (previewed as code only). */
   hasMermaid: boolean;
+}
+
+/** One blocking problem packaged with everything a fix-it box needs:
+ *  the exact offending text from the user's input, a one-line repair
+ *  prompt to paste into an AI, and the exact target to replace. */
+export interface NlmFixableProblem {
+  id: string;
+  message: string;
+  /** Exact substring of the raw input (a few lines around the offense). */
+  snippet: string;
+  /** Single-sentence instruction; the copy payload is fixPrompt + snippet. */
+  fixPrompt: string;
+  /** Exact string in the raw input to swap for the pasted fix. */
+  target: string;
+}
+
+/** One-line repair instruction shared by the normalize + render stages. */
+export function buildNlmFixPrompt(message: string): string {
+  return `Fix only the LaTeX math delimiters/syntax in the snippet below and return just the corrected snippet with no explanation. Error: ${message}`;
 }
 
 /** Code spans/blocks are extracted before any math processing so we never touch them. */
@@ -208,13 +230,139 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
 
+/** Split raw input into lines (CRLF-safe). */
+function splitRawLines(raw: string): string[] {
+  return raw.replace(/\r\n?/g, "\n").split("\n");
+}
+
+/** A few lines around idx (2 before / 2 after) — always an exact
+ *  substring of the raw input so Replace can swap it verbatim. */
+function windowForLines(lines: string[], idx: number, before = 2, after = 2): string {
+  const start = Math.max(0, idx - before);
+  const end = Math.min(lines.length, idx + after + 1);
+  return lines.slice(start, end).join("\n");
+}
+
+/** First line with an odd count of unescaped single-$ (skips fenced code). -1 if none. */
+function firstOddDollarLine(lines: string[]): number {
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const singles = line.match(/(?<!\$)(?<!\\)\$(?!\$)/g) || [];
+    if (singles.length % 2 === 1) return i;
+  }
+  return -1;
+}
+
+/** First line with an unescaped $$ (skips fenced code). -1 if none. */
+function firstDoubleDollarLine(lines: string[]): number {
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    if (/(?<!\\)\$\$/.test(line)) return i;
+  }
+  return -1;
+}
+
+/** Exact raw-lines window around the first suspect $ line. */
+function snippetForUnmatchedDollar(raw: string, kind: "single" | "display"): string {
+  const lines = splitRawLines(raw);
+  const idx =
+    kind === "display" ? firstDoubleDollarLine(lines) : firstOddDollarLine(lines);
+  if (idx !== -1) return windowForLines(lines, idx);
+  const fb = lines.findIndex((l) => l.includes("$"));
+  return windowForLines(lines, fb === -1 ? 0 : fb);
+}
+
+const TEX_STOP = new Set([
+  "frac",
+  "sqrt",
+  "sum",
+  "prod",
+  "int",
+  "lim",
+  "sums",
+  "sin",
+  "cos",
+  "tan",
+  "log",
+  "ln",
+  "exp",
+  "text",
+  "left",
+  "right",
+  "times",
+  "cdot",
+  "div",
+  "leq",
+  "geq",
+  "neq",
+  "approx",
+  "infty",
+  "partial",
+  "begin",
+  "end",
+]);
+
+/** Distinctive natural-language keywords from a TeX segment (skips LaTeX
+ *  command names and Greek letters) for locating the raw source lines. */
+function keywordsFromTex(tex: string): string[] {
+  const words = tex.match(/[A-Za-z]{4,}/g) || [];
+  const out: string[] = [];
+  for (const w of words) {
+    if (TEX_STOP.has(w) || TEX_STOP.has(w.toLowerCase())) continue;
+    if (GREEK_NAMES.includes(w)) continue;
+    if (out.some((o) => o.toLowerCase() === w.toLowerCase())) continue;
+    out.push(w);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/** Raw-lines window most likely containing the given TeX segment. Exported
+ *  so the render stage can locate the same region in the user's input. */
+export function snippetForTex(raw: string, tex: string): string {
+  const lines = splitRawLines(raw);
+  for (const k of keywordsFromTex(tex)) {
+    const idx = lines.findIndex((l) => l.includes(k));
+    if (idx !== -1) return windowForLines(lines, idx);
+  }
+  const frag = tex
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[\\${}\s]+/, "")
+    .slice(0, 24);
+  if (frag.length >= 6) {
+    const idx = lines.findIndex((l) => l.includes(frag.slice(0, 12)));
+    if (idx !== -1) return windowForLines(lines, idx);
+  }
+  const d = firstOddDollarLine(lines);
+  return windowForLines(lines, d === -1 ? 0 : d);
+}
+
+function toFixable(id: string, message: string, snippet: string): NlmFixableProblem {
+  if (!snippet) snippet = "(could not locate the offending lines — copy the fix prompt and inspect $ delimiters near your latest edit)";
+  return { id, message, snippet, fixPrompt: buildNlmFixPrompt(message), target: snippet };
+}
+
 export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
   const warnings: string[] = [];
   const errors: string[] = [];
+  const fixable: NlmFixableProblem[] = [];
   const repairs = new Set<string>();
 
   if (!raw || !raw.trim()) {
-    return { markdown: "", warnings: [], errors: [], mathCounts: { inline: 0, display: 0 }, hasMermaid: false };
+    return { markdown: "", warnings: [], errors: [], fixable: [], mathCounts: { inline: 0, display: 0 }, hasMermaid: false };
   }
 
   // 1. Baseline cleanup (whitespace only — never touches wording).
@@ -278,19 +426,31 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
   const restoredDisplayPlaceholders = displaySegs.length;
   const restoredInlinePlaceholders = inlineSegs.length;
   if (leftoverDisplay > 0) {
-    errors.push(
-      `Found ${leftoverDisplay} unmatched "$$" delimiter${leftoverDisplay === 1 ? "" : "s"}. Each display equation needs an opening and closing $$ on its own lines.`
-    );
+    const msg =
+      `Found ${leftoverDisplay} unmatched "$$" delimiter${leftoverDisplay === 1 ? "" : "s"}. Each display equation needs an opening and closing $$ on its own lines.`;
+    errors.push(msg);
+    fixable.push(toFixable("norm-unmatched-display", msg, snippetForUnmatchedDollar(raw, "display")));
   }
   if (leftoverSingle > 0) {
-    errors.push(
-      `Found ${leftoverSingle} unmatched "$" delimiter${leftoverSingle === 1 ? "" : "s"}. Inline math needs matching $...$ pairs (a lone $ for currency can trigger this — wrap it in backticks like \`$\`).`
-    );
+    const msg =
+      `Found ${leftoverSingle} unmatched "$" delimiter${leftoverSingle === 1 ? "" : "s"}. Inline math needs matching $...$ pairs (a lone $ for currency can trigger this — wrap it in backticks like \`$\`).`;
+    errors.push(msg);
+    fixable.push(toFixable("norm-unmatched-inline", msg, snippetForUnmatchedDollar(raw, "single")));
   }
 
   // 7. Validate each math segment.
-  displaySegs.forEach((tex, i) => errors.push(...validateMathSegment(tex, i, true)));
-  inlineSegs.forEach((tex, i) => errors.push(...validateMathSegment(tex, i, false)));
+  displaySegs.forEach((tex, i) => {
+    for (const [k, msg] of validateMathSegment(tex, i, true).entries()) {
+      errors.push(msg);
+      fixable.push(toFixable(`norm-display-${i}-${k}`, msg, snippetForTex(raw, tex)));
+    }
+  });
+  inlineSegs.forEach((tex, i) => {
+    for (const [k, msg] of validateMathSegment(tex, i, false).entries()) {
+      errors.push(msg);
+      fixable.push(toFixable(`norm-inline-${i}-${k}`, msg, snippetForTex(raw, tex)));
+    }
+  });
 
   // 8. Restore math placeholders in canonical form.
   work = work.replace(new RegExp(`${MATH_PH}D(\\d+)@`, "g"), (_, i) => {
@@ -330,6 +490,7 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
     markdown,
     warnings,
     errors,
+    fixable,
     mathCounts: { inline: restoredInlinePlaceholders, display: restoredDisplayPlaceholders },
     hasMermaid,
   };
