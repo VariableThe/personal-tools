@@ -36,9 +36,12 @@ export interface NlmFixableProblem {
   target: string;
 }
 
-/** One-line repair instruction shared by the normalize + render stages. */
+/** One-line repair instruction shared by the normalize + render stages.
+ *  The fenced-plaintext requirement works around AI chat frontends that
+ *  re-render $ math and mangle backslashes in raw output. */
 export function buildNlmFixPrompt(message: string): string {
-  return `Fix only the LaTeX math delimiters/syntax in the snippet below and return just the corrected snippet with no explanation. Error: ${message}`;
+  const clean = message.replace(/\s*\.\s*$/, "");
+  return `Fix only the LaTeX math delimiters/syntax in the snippet below and return just the corrected snippet with no explanation. Error: ${clean}. Return the corrected snippet as plaintext inside a single \`\`\`text fenced code block with nothing outside the fence.`;
 }
 
 /** Code spans/blocks are extracted before any math processing so we never touch them. */
