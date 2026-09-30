@@ -273,8 +273,9 @@ function locateDollarTriggers(raw: string, kind: "single" | "display"): NlmDolla
   const lines = splitRawLines(raw);
   const triggers: NlmDollarTrigger[] = [];
   // Fresh regexes per call (shared /g state is not re-entrant). The inline
-  // and leftover patterns are exact copies of the pipeline's own.
-  const inlineRe = /(?<!\$)(?<!\\)\$(?!\$|\s)([^$\n]*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g;
+  // and leftover patterns are exact copies of the pipeline's own — including
+  // the inner's escaped-\$ tolerance.
+  const inlineRe = /(?<!\$)(?<!\\)\$(?!\$|\s)((?:\\\$|[^$\n])*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g;
   const leftoverRe = /(?<!\$)(?<!\\)\$(?!\$)/g;
   const displayPairRe = /\$\$([\s\S]*?)\$\$/g;
   const escParenRe = /\\\\\(([\s\S]*?)\\\\\)/g;
@@ -509,10 +510,13 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
   });
 
   // 5. Extract inline math ($...$), repair inside.
-  // An escaped "\$" is a literal dollar, never a delimiter.
+  // An escaped "\$" is a literal dollar, never a delimiter — and it may sit
+  // INSIDE a pair (e.g. $\le \$5\text{...}$), so the inner pattern crosses it.
+  // The closer still rejects \$ (lookbehind) and $5 (digit guard), so lone
+  // currency dollars keep erroring exactly as before.
   const inlineSegs: string[] = [];
   // Avoid matching $$ remnants or $ prices: require non-space adjacency on open.
-  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)([^$\n]*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (m, inner) => {
+  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)((?:\\\$|[^$\n])*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (m, inner) => {
     const repaired = repairMathSegment(inner, warnings, repairs);
     inlineSegs.push(repaired);
     return `${MATH_PH}I${inlineSegs.length - 1}@`;

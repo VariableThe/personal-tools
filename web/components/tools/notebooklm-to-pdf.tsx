@@ -756,7 +756,7 @@ function NlmErrorFixBox({
       {problem.location && (
         <p className="text-[11px] font-mono text-muted-foreground">Trigger: {problem.location}</p>
       )}
-      <pre className="whitespace-pre-wrap text-xs leading-relaxed bg-card border border-border p-3 max-h-48 overflow-y-auto">
+      <pre className="text-xs leading-relaxed bg-card border border-border p-3 max-h-48 overflow-auto whitespace-pre">
         {problem.snippetStartLine !== undefined
           ? formatNumberedSnippet(problem.snippet, problem.snippetStartLine, problem.triggerLines)
           : problem.snippet}
