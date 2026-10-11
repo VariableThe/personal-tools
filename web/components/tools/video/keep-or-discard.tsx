@@ -6,10 +6,8 @@ import {
   ThumbsDown,
   SkipForward,
   Undo2,
-  Upload,
   Download,
   Loader2,
-  Shield,
   AlertCircle,
   Image as ImageIcon,
   Film,
@@ -28,6 +26,7 @@ import {
   formatBytes,
   type MediaItem,
 } from "@/lib/media-files";
+import { FileDropzone } from "@/components/tools/video/file-dropzone";
 
 type Pile = "keep" | "discard" | "skip";
 
@@ -46,7 +45,6 @@ export function KeepDiscardTool() {
   const [heicProgress, setHeicProgress] = useState<{ done: number; total: number } | null>(null);
   const [zipping, setZipping] = useState<"keep" | "discard" | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const done = items.length > 0 && cursor >= items.length;
@@ -89,12 +87,18 @@ export function KeepDiscardTool() {
       ]
         .filter(Boolean)
         .join(" · ");
-      if (added === 0 && failed.length + skipped.length === list.length) {
+      if (added === 0 && failed.length > 0) {
         setError(
-          `No images or videos in that selection — try JPG/PNG/WebP/HEIC or MP4/WebM/MOV.${skipped.length > 0 ? ` Skipped: ${skipped.join(", ")}.` : ""}`
+          `Couldn't decode those photos on-device (${failed.join(", ")}). Convert to JPG and retry.`
+        );
+      } else if (added === 0 && skipped.length > 0) {
+        setError(
+          `No images or videos in that selection — try JPG, PNG, WebP, HEIC, MP4, WebM or MOV. Skipped: ${skipped.join(", ")}.`
         );
       } else if (problems) {
         setError(`Picking up files… ${problems}.`);
+      } else {
+        setError(null);
       }
     })();
   }
@@ -223,57 +227,18 @@ export function KeepDiscardTool() {
           </Badge>
         </div>
         <CardDescription className="font-mono text-xs">
-          Select a batch of photos + clips, step through them one by one, and split them into a keep
-          pile and a discard pile. Exports download as ZIPs. Nothing uploads.
+          Step through a batch, split keep from discard. Exports as ZIPs. Nothing uploads.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-5">
         {items.length === 0 ? (
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              addFiles(e.dataTransfer.files);
-            }}
-            onClick={() => fileInputRef.current?.click()}
-            className="border border-dashed border-border hover:border-primary/50 bg-muted/20 p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors"
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*,.heic,.heif"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files) addFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <div className="w-12 h-12 border border-border bg-card flex items-center justify-center">
-              <Upload className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-bold uppercase tracking-wide">
-                Drop photos & videos here or click to browse
-              </p>
-              <p className="font-mono text-xs text-muted-foreground mt-1">
-                multi-select · JPG PNG WebP · HEIC auto-converts on-device · MP4 WebM MOV
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              className="pointer-events-none font-mono text-xs uppercase tracking-wide rounded-none"
-            >
-              Select Files
-            </Button>
-            {heicProgress && (
-              <p className="font-mono text-xs text-primary flex items-center gap-2">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Converting HEIC on-device… {heicProgress.done}/{heicProgress.total}
-              </p>
-            )}
-          </div>
+          <FileDropzone
+            accept="image/*,video/*,.heic,.heif"
+            onFiles={(files) => addFiles(files)}
+            formatsLine="JPG PNG WebP · HEIC auto-converts · MP4 WebM MOV"
+            progress={heicProgress}
+          />
         ) : done ? (
           <div className="space-y-4 text-center py-6">
             <p className="text-2xl font-black uppercase tracking-tight">Sorted ✓</p>
@@ -441,11 +406,6 @@ export function KeepDiscardTool() {
             <AlertDescription className="font-mono text-xs">{error}</AlertDescription>
           </Alert>
         )}
-
-        <p className="font-mono text-[10px] text-muted-foreground flex items-center gap-1.5">
-          <Shield className="w-3 h-3" /> Files never leave your browser — sorting and ZIP export run
-          fully on-device.
-        </p>
       </CardContent>
     </Card>
   );
