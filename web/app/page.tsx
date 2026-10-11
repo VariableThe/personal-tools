@@ -18,6 +18,7 @@ import {
   FolderKanban,
   Image as ImageIcon,
   Presentation,
+  Clapperboard,
   Zap,
   Mic,
   Search,
@@ -48,6 +49,7 @@ import { ImageUpscalerTool } from "@/components/tools/image/image-upscaler";
 
 import { XmlToCsvTool } from "@/components/tools/xml-to-csv";
 import { AudioTranscriberTool } from "@/components/tools/audio/audio-transcriber";
+import { VideoMontageTool } from "@/components/tools/video/montage-builder";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -92,6 +94,11 @@ const CATEGORIES: Record<string, { label: string; icon: LucideIcon; tools: ToolD
     label: "Audio",
     icon: Mic,
     tools: [{ id: "transcribe", label: "Audio Transcriber", icon: Mic }],
+  },
+  video: {
+    label: "Video",
+    icon: Clapperboard,
+    tools: [{ id: "montage", label: "Montage Builder", icon: Clapperboard }],
   },
   data: {
     label: "Data",
@@ -141,6 +148,7 @@ export default function Home() {
     pdf: selection.category === "pdf" ? selection.tool : "merge",
     image: "compress",
     audio: "transcribe",
+    video: "montage",
     data: "xml",
   });
   const [query, setQuery] = useState("");
@@ -287,7 +295,7 @@ export default function Home() {
             <p className="text-[11px] lg:text-xs text-muted-foreground font-mono md:whitespace-nowrap">
               <span className="md:hidden">{totalTools} utilities · 100% on-device</span>
               <span className="hidden md:inline">
-                {totalTools} utilities · PDF · image · audio · data — 100% on-device, zero uploads. No
+                {totalTools} utilities · PDF · image · video · audio · data — 100% on-device, zero uploads. No
                 files ever leave your browser.
               </span>
             </p>
@@ -329,7 +337,7 @@ export default function Home() {
                 </button>
               )}
             </div>
-            <TabsList className="grid grid-cols-4 bg-card border border-border w-full h-auto p-1 gap-1">
+            <TabsList className="grid grid-cols-5 bg-card border border-border w-full h-auto p-1 gap-1">
               {Object.entries(CATEGORIES).map(([cat, def]) => {
                 const CatIcon = def.icon;
                 return (
@@ -379,6 +387,13 @@ export default function Home() {
             {query.trim() && renderGlobalResults()}
             <div className="max-w-4xl mx-auto">
               <AudioTranscriberTool />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="video" className="space-y-6">
+            {query.trim() && renderGlobalResults()}
+            <div className="max-w-4xl mx-auto">
+              <VideoMontageTool />
             </div>
           </TabsContent>
 
