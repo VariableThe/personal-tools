@@ -76,6 +76,7 @@ export function VideoMontageTool() {
   const [durationMode, setDurationMode] = useState<"full" | "fixed">("fixed");
   const [fixedSecs, setFixedSecs] = useState(1);
   const [photoPan, setPhotoPan] = useState(true);
+  const [transitions, setTransitions] = useState(true);
   const [orientation, setOrientation] = useState<"landscape" | "portrait">("landscape");
   const [portraitFit, setPortraitFit] = useState<"width" | "height">("width");
   const [muteClips, setMuteClips] = useState(true);
@@ -107,6 +108,7 @@ export function VideoMontageTool() {
   const rafRef = useRef(0);
   const activeVidRef = useRef<string | null>(null);
   const lastIdxRef = useRef(-1);
+  const lastTransRef = useRef(-1);
   const lastShownRef = useRef(-1);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -154,18 +156,28 @@ export function VideoMontageTool() {
       }),
     [clips, durationMode, fixedSecs]
   );
-  const total = useMemo(() => durations.reduce((a, b) => a + b, 0), [durations]);
 
-  /** Cumulative start times, for locating the clip at time t. */
+  /** Overlapped blur-dissolve between neighbours (0 = hard cuts). */
+  const xfade = useMemo(() => {
+    if (!transitions || reduceMotion || durations.length < 2) return 0;
+    return Math.min(0.3, Math.min(...durations) * 0.5);
+  }, [transitions, reduceMotion, durations]);
+
+  const total = useMemo(
+    () => durations.reduce((a, b) => a + b, 0) - xfade * Math.max(0, durations.length - 1),
+    [durations, xfade]
+  );
+
+  /** Cumulative start times with transition overlap, for locating the clip at time t. */
   const starts = useMemo(() => {
     const s: number[] = [];
     let acc = 0;
-    for (const d of durations) {
+    for (let i = 0; i < durations.length; i++) {
       s.push(acc);
-      acc += d;
+      acc += durations[i] - (i < durations.length - 1 ? xfade : 0);
     }
     return s;
-  }, [durations]);
+  }, [durations, xfade]);
 
   function clipIndexAt(t: number): number {
     for (let i = starts.length - 1; i >= 0; i--) {
@@ -309,6 +321,7 @@ export function VideoMontageTool() {
     vidCache.current.clear();
     activeVidRef.current = null;
     lastIdxRef.current = -1;
+    lastTransRef.current = -1;
     lastShownRef.current = 0;
     setOutputUrl(null);
     setPlayhead(0);
@@ -320,6 +333,7 @@ export function VideoMontageTool() {
   function redrawIdle() {
     if (!playState.current.playing) {
       lastIdxRef.current = -1;
+    lastTransRef.current = -1;
       drawFrame(lastShownRef.current >= 0 ? lastShownRef.current : 0);
     }
   }
@@ -402,31 +416,27 @@ export function VideoMontageTool() {
     ctx.drawImage(media, (W - dw) / 2, (H - dh) / 2, dw, dh);
   }
 
-  function drawFrame(t: number) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const { w: W, h: H } = dims;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, W, H);
-    if (clips.length === 0) return;
-    const clamped = Math.min(t, Math.max(0, total - 0.001));
-    const i = clipIndexAt(clamped);
-    const clip = clips[i];
+  /** Draw one clip at its local time (no transitions). */
+  function drawClip(
+    ctx: CanvasRenderingContext2D,
+    W: number,
+    H: number,
+    index: number,
+    local: number
+  ) {
+    const clip = clips[index];
     if (!clip) return;
-    const local = clamped - starts[i];
-    const p = durations[i] > 0 ? Math.min(1, Math.max(0, local / durations[i])) : 0;
+    const p = durations[index] > 0 ? Math.min(1, Math.max(0, local / durations[index])) : 0;
 
     if (clip.kind === "image") {
       const img = getImage(clip);
       if (!img) return;
       if (orientation === "portrait") {
         // Subtle zoom only — alternate direction per clip, no lateral pan.
-        const z = zoomOn ? (i % 2 === 0 ? 1 + 0.05 * p : 1.05 - 0.05 * p) : 1;
+        const z = zoomOn ? (index % 2 === 0 ? 1 + 0.05 * p : 1.05 - 0.05 * p) : 1;
         drawPortraitFit(ctx, img, img.naturalWidth, img.naturalHeight, z);
       } else if (zoomOn) {
-        const z = i % 2 === 0 ? 1 + 0.05 * p : 1.05 - 0.05 * p;
+        const z = index % 2 === 0 ? 1 + 0.05 * p : 1.05 - 0.05 * p;
         drawCover(ctx, img, img.naturalWidth, img.naturalHeight, z, 0, 0, W, H);
       } else {
         drawCover(ctx, img, img.naturalWidth, img.naturalHeight, 1, 0, 0, W, H);
@@ -439,6 +449,40 @@ export function VideoMontageTool() {
       } else {
         drawCover(ctx, v, v.videoWidth, v.videoHeight, 1, 0, 0, W, H);
       }
+    }
+  }
+
+  function drawFrame(t: number) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { w: W, h: H } = dims;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+    if (clips.length === 0) return;
+    const clamped = Math.min(t, Math.max(0, total - 0.001));
+    const i = clipIndexAt(clamped);
+    const local = clamped - starts[i];
+
+    if (xfade > 0 && i > 0 && local < xfade) {
+      // Blur-dissolve: outgoing blurs out underneath the fading-in incoming clip.
+      const a = Math.min(1, Math.max(0, local / xfade));
+      const outLocal = durations[i - 1] - xfade + local;
+      ctx.save();
+      try {
+        ctx.filter = `blur(${(12 * a).toFixed(1)}px)`;
+      } catch {
+        // ctx.filter unsupported — plain crossfade remains
+      }
+      drawClip(ctx, W, H, i - 1, outLocal);
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = a;
+      drawClip(ctx, W, H, i, local);
+      ctx.restore();
+    } else {
+      drawClip(ctx, W, H, i, local);
     }
   }
 
@@ -499,9 +543,21 @@ export function VideoMontageTool() {
       }
     }
     const i = clipIndexAt(now);
-    if (i !== lastIdxRef.current) {
+    const local = now - starts[i];
+    const trans = xfade > 0 && i > 0 && local < xfade ? i - 1 : -1;
+    if (i !== lastIdxRef.current || trans !== lastTransRef.current) {
       lastIdxRef.current = i;
+      lastTransRef.current = trans;
       syncVideos(i, true);
+      if (trans >= 0) {
+        // Overlap: the outgoing video keeps playing under the dissolve.
+        const oc = clips[trans];
+        if (oc?.kind === "video") {
+          const ov = getVideoEl(oc);
+          ov.muted = muteClips;
+          if (ov.paused) ov.play().catch(() => {});
+        }
+      }
     }
     drawFrame(now);
     rafRef.current = requestAnimationFrame(tick);
@@ -511,6 +567,7 @@ export function VideoMontageTool() {
     if (clips.length === 0 || total <= 0) return;
     setError(null);
     lastIdxRef.current = -1;
+    lastTransRef.current = -1;
     playState.current = { playing: true, t0: -1, offset: from, lastTs: -1 };
     setPlaying(true);
     syncVideos(clipIndexAt(from), true);
@@ -561,6 +618,7 @@ export function VideoMontageTool() {
     setOutputUrl(null);
     // Force the loop (or next play) to resync clip video + music to the new position.
     lastIdxRef.current = -1;
+    lastTransRef.current = -1;
     activeVidRef.current = null;
     const i = clipIndexAt(t);
     const clip = clips[i];
@@ -887,6 +945,10 @@ export function VideoMontageTool() {
             <label className="flex items-center gap-2 cursor-pointer font-mono text-xs" title="Slow zoom across each photo">
               <input type="checkbox" checked={photoPan} onChange={(e) => setPhotoPan(e.target.checked)} className="rounded-none" />
               Subtle zoom
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer font-mono text-xs" title="0.3s blur-dissolve between clips">
+              <input type="checkbox" checked={transitions} onChange={(e) => setTransitions(e.target.checked)} disabled={playing || exporting} className="rounded-none disabled:opacity-50" />
+              Blur transitions
             </label>
             <label className="flex items-center gap-2 cursor-pointer font-mono text-xs" title="Silence clip audio for the music bed">
               <input type="checkbox" checked={muteClips} onChange={(e) => setMuteClips(e.target.checked)} className="rounded-none" />
