@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Clapperboard,
-  Upload,
   Trash2,
   ArrowUp,
   ArrowDown,
@@ -12,7 +11,6 @@ import {
   Pause,
   Download,
   Loader2,
-  Shield,
   AlertCircle,
   Image as ImageIcon,
   Film,
@@ -25,10 +23,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { convertHeicToJpeg, runPool } from "@/lib/heic-convert";
+import {
+  buildMediaItems,
+  formatBytes,
+  type MediaItem,
+} from "@/lib/media-files";
+import { FileDropzone } from "@/components/tools/video/file-dropzone";
 
-const W = 1280;
-const H = 720;
+const LANDSCAPE = { w: 1280, h: 720 };
+const PORTRAIT = { w: 720, h: 1280 };
 const MAX_TOTAL_SECS = 180;
 
 interface Clip {
@@ -41,8 +44,16 @@ interface Clip {
   naturalDuration?: number;
 }
 
-function uid(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+/** Adapt a shared MediaItem to a timeline clip. */
+function toClip(m: MediaItem): Clip {
+  return {
+    id: m.id,
+    file: m.file,
+    kind: m.kind,
+    url: m.previewUrl,
+    name: m.name,
+    size: m.size,
+  };
 }
 
 /** Parse a YouTube URL into its 11-char video id, or null. */
@@ -60,56 +71,13 @@ function formatTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-const HEIC_TYPES = new Set([
-  "image/heic",
-  "image/heif",
-  "image/heic-sequence",
-  "image/heif-sequence",
-]);
-const HEIC_EXT = /\.(heic|heif|hif)$/i;
-const VIDEO_EXT = /\.(mp4|m4v|mov|webm|ogv)$/i;
-const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif|bmp|svg)$/i;
-
-function blankType(t: string): boolean {
-  return t === "" || t === "application/octet-stream";
-}
-
-function looksHeic(name: string, type: string): boolean {
-  return HEIC_TYPES.has(type) || (blankType(type) && HEIC_EXT.test(name));
-}
-
-/** Resolve true if this browser can natively decode the image at url. */
-function canDecodeImage(url: string, timeoutMs = 9000): Promise<boolean> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const timer = window.setTimeout(() => {
-      img.src = "";
-      resolve(false);
-    }, timeoutMs);
-    img.onload = () => {
-      window.clearTimeout(timer);
-      resolve(img.naturalWidth > 0);
-    };
-    img.onerror = () => {
-      window.clearTimeout(timer);
-      resolve(false);
-    };
-    img.src = url;
-  });
-}
-
 export function VideoMontageTool() {
   const [clips, setClips] = useState<Clip[]>([]);
   const [durationMode, setDurationMode] = useState<"full" | "fixed">("fixed");
   const [fixedSecs, setFixedSecs] = useState(1);
   const [photoPan, setPhotoPan] = useState(true);
-  const [videoPan, setVideoPan] = useState(true);
+  const [orientation, setOrientation] = useState<"landscape" | "portrait">("landscape");
+  const [portraitFit, setPortraitFit] = useState<"width" | "height">("width");
   const [muteClips, setMuteClips] = useState(true);
 
   const [ytUrl, setYtUrl] = useState("");
@@ -131,7 +99,6 @@ export function VideoMontageTool() {
   const [heicProgress, setHeicProgress] = useState<{ done: number; total: number } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const musicInputRef = useRef<HTMLInputElement>(null);
   const musicRef = useRef<HTMLAudioElement>(null);
   const imgCache = useRef(new Map<string, HTMLImageElement>());
@@ -164,6 +131,18 @@ export function VideoMontageTool() {
       return false;
     }
   }, []);
+
+  const dims = orientation === "portrait" ? PORTRAIT : LANDSCAPE;
+
+  /** Honor the OS reduced-motion setting: stills stay static. */
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    []
+  );
+  const zoomOn = photoPan && !reduceMotion;
 
   const durations = useMemo(
     () =>
@@ -236,51 +215,26 @@ export function VideoMontageTool() {
     void (async () => {
       const list = Array.from(files);
       if (list.length === 0) return;
-      const fast: Clip[] = [];
-      const heicQueue: { f: File; url: string }[] = [];
-      const skipped: string[] = [];
-      for (const f of list) {
-        const t = f.type.toLowerCase();
-        const isHeic = looksHeic(f.name, t);
-        // Trust the MIME type first; fall back to extension when the OS reports nothing.
-        const isVideo =
-          t.startsWith("video/") || (blankType(t) && VIDEO_EXT.test(f.name) && !isHeic);
-        const isImage =
-          (t.startsWith("image/") && !HEIC_TYPES.has(t)) ||
-          (blankType(t) && IMAGE_EXT.test(f.name));
-        const url = URL.createObjectURL(f);
-        if (isVideo) {
-          fast.push({
-            id: uid(),
-            file: f,
-            kind: "video",
-            url,
-            name: f.name,
-            size: f.size,
-          });
-        } else if (isHeic) {
-          heicQueue.push({ f, url });
-        } else if (isImage) {
-          fast.push({
-            id: uid(),
-            file: f,
-            kind: "image",
-            url,
-            name: f.name,
-            size: f.size,
-          });
-        } else {
-          URL.revokeObjectURL(url);
-          skipped.push(f.name);
-        }
-      }
-
-      // Fast batch lands immediately — videos and natively-decodable images.
-      if (fast.length > 0) {
-        setError(null);
+      setError(null);
+      let heicAdded = 0;
+      const { items: fast, failed, skipped } = await buildMediaItems(
+        list,
+        (heicItem) => {
+          const clip = toClip(heicItem);
+          heicAdded += 1;
+          setOutputUrl(null);
+          setClips((prev) => [...prev, clip]);
+          getImage(clip);
+        },
+        (doneCount, total) =>
+          setHeicProgress(doneCount >= total ? null : { done: doneCount, total })
+      );
+      const fastClips = fast.map(toClip);
+      if (fastClips.length > 0) {
         setOutputUrl(null);
-        setClips((prev) => [...prev, ...fast]);
-        for (const clip of fast) {
+        setClips((prev) => [...prev, ...fastClips]);
+        // Kick off decoding so posters/frames are ready, not black.
+        for (const clip of fastClips) {
           if (clip.kind === "image") getImage(clip);
           else {
             getVideoEl(clip);
@@ -289,55 +243,18 @@ export function VideoMontageTool() {
         }
       }
 
-      // HEIC batch: native decode where supported (instant), else on-device
-      // WASM conversion. Streams onto the timeline as each file finishes.
-      const failed: string[] = [];
-      if (heicQueue.length > 0) {
-        setHeicProgress({ done: 0, total: heicQueue.length });
-        await runPool(heicQueue, 3, async ({ f, url }) => {
-          try {
-            let clip: Clip;
-            if (await canDecodeImage(url, 8000)) {
-              clip = { id: uid(), file: f, kind: "image", url, name: f.name, size: f.size };
-            } else {
-              const jpeg = await convertHeicToJpeg(f);
-              URL.revokeObjectURL(url);
-              const jpgName = f.name.replace(/\.(heic|heif|hif)$/i, ".jpg");
-              const cUrl = URL.createObjectURL(jpeg);
-              clip = {
-                id: uid(),
-                file: new File([jpeg], jpgName, { type: "image/jpeg" }),
-                kind: "image",
-                url: cUrl,
-                name: `${f.name} → ${jpgName}`,
-                size: jpeg.size,
-              };
-            }
-            setOutputUrl(null);
-            setClips((prev) => [...prev, clip]);
-            getImage(clip);
-          } catch {
-            URL.revokeObjectURL(url);
-            failed.push(f.name);
-          } finally {
-            setHeicProgress((p) => (p ? { done: p.done + 1, total: p.total } : p));
-          }
-        });
-        setHeicProgress(null);
-      }
-
       const problems = [
         failed.length > 0 ? `couldn't decode: ${failed.join(", ")}` : "",
         skipped.length > 0 ? `skipped: ${skipped.join(", ")}` : "",
       ]
         .filter(Boolean)
         .join(" · ");
-      const added = fast.length + (heicQueue.length - failed.length);
-      if (added === 0) {
+      const added = fastClips.length + heicAdded;
+      if (added === 0 && failed.length + skipped.length === list.length) {
         setError(
           failed.length > 0
-            ? `Couldn't decode those HEIC photos on-device (${failed.join(", ")}). Convert to JPG first — on iPhone: Settings → Camera → Formats → Most Compatible.`
-            : `No images or videos in that selection — try JPG/PNG/WebP/HEIC or MP4/WebM/MOV.${skipped.length > 0 ? ` Skipped: ${skipped.join(", ")}.` : ""}`
+            ? `Couldn't decode those photos on-device (${failed.join(", ")}). Convert to JPG and retry.`
+            : `No images or videos in that selection — try JPG, PNG, WebP, HEIC, MP4, WebM or MOV.${skipped.length > 0 ? ` Skipped: ${skipped.join(", ")}.` : ""}`
         );
       } else if (problems) {
         setError(`Added ${added} clip(s). ${problems}.`);
@@ -444,7 +361,9 @@ export function VideoMontageTool() {
     mh: number,
     zoom: number,
     panX: number,
-    panY: number
+    panY: number,
+    W: number,
+    H: number
   ) {
     const base = Math.max(W / mw, H / mh);
     const s = base * zoom;
@@ -457,11 +376,38 @@ export function VideoMontageTool() {
     ctx.drawImage(media, dx, dy, dw, dh);
   }
 
+  /**
+   * Portrait fit: scale to the chosen edge, center on the other axis, and
+   * fill any leftover bars with a blurred cover of the same frame.
+   */
+  function drawPortraitFit(
+    ctx: CanvasRenderingContext2D,
+    media: HTMLImageElement | HTMLVideoElement,
+    mw: number,
+    mh: number,
+    zoom: number
+  ) {
+    const { w: W, h: H } = dims;
+    ctx.save();
+    try {
+      ctx.filter = "blur(32px) brightness(0.55)";
+    } catch {
+      // ctx.filter unsupported — flat black bars remain
+    }
+    drawCover(ctx, media, mw, mh, 1.1, 0, 0, W, H);
+    ctx.restore();
+    const s = (portraitFit === "width" ? W / mw : H / mh) * zoom;
+    const dw = mw * s;
+    const dh = mh * s;
+    ctx.drawImage(media, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  }
+
   function drawFrame(t: number) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const { w: W, h: H } = dims;
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, W, H);
     if (clips.length === 0) return;
@@ -475,23 +421,23 @@ export function VideoMontageTool() {
     if (clip.kind === "image") {
       const img = getImage(clip);
       if (!img) return;
-      if (photoPan) {
-        // Alternate Ken Burns direction per clip so the reel doesn't feel uniform.
-        const fwd = i % 2 === 0;
-        const zoom = fwd ? 1.02 + 0.1 * p : 1.12 - 0.1 * p;
-        const panX = fwd ? -0.7 + 1.4 * p : 0.7 - 1.4 * p;
-        const panY = fwd ? 0.5 - 1.0 * p : -0.5 + 1.0 * p;
-        drawCover(ctx, img, img.naturalWidth, img.naturalHeight, zoom, panX, panY);
+      if (orientation === "portrait") {
+        // Subtle zoom only — alternate direction per clip, no lateral pan.
+        const z = zoomOn ? (i % 2 === 0 ? 1 + 0.05 * p : 1.05 - 0.05 * p) : 1;
+        drawPortraitFit(ctx, img, img.naturalWidth, img.naturalHeight, z);
+      } else if (zoomOn) {
+        const z = i % 2 === 0 ? 1 + 0.05 * p : 1.05 - 0.05 * p;
+        drawCover(ctx, img, img.naturalWidth, img.naturalHeight, z, 0, 0, W, H);
       } else {
-        drawCover(ctx, img, img.naturalWidth, img.naturalHeight, 1, 0, 0);
+        drawCover(ctx, img, img.naturalWidth, img.naturalHeight, 1, 0, 0, W, H);
       }
     } else {
       const v = getVideoEl(clip);
       if (v.readyState < 2 || v.videoWidth === 0) return;
-      if (videoPan) {
-        drawCover(ctx, v, v.videoWidth, v.videoHeight, 1.06, -0.5 + p, 0.35 - 0.7 * p);
+      if (orientation === "portrait") {
+        drawPortraitFit(ctx, v, v.videoWidth, v.videoHeight, 1);
       } else {
-        drawCover(ctx, v, v.videoWidth, v.videoHeight, 1, 0, 0);
+        drawCover(ctx, v, v.videoWidth, v.videoHeight, 1, 0, 0, W, H);
       }
     }
   }
@@ -594,6 +540,16 @@ export function VideoMontageTool() {
     } else {
       startPlayback(playhead >= total ? 0 : playhead);
     }
+  }
+
+  /** Switch output shape. Restarts from 0 — the canvas backing store changes size. */
+  function setFormat(o: "landscape" | "portrait", f?: "width" | "height") {
+    if (playing || exporting) return;
+    stopPlayback();
+    lastShownRef.current = 0;
+    setPlayhead(0);
+    setOrientation(o);
+    if (f) setPortraitFit(f);
   }
 
   /** Jump the playhead. Continues playing from `to` if playing, else repaints idle. */
@@ -757,49 +713,17 @@ export function VideoMontageTool() {
           </Badge>
         </div>
         <CardDescription className="font-mono text-xs">
-          Order photos + clips, add drift motion, lay background music under muted footage, export one reel. Nothing uploads.
+          Photos + clips in, one reel out. Nothing uploads.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-5">
-        {/* dropzone */}
-        <div
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            addFiles(e.dataTransfer.files);
-          }}
-          onClick={() => fileInputRef.current?.click()}
-          className="border border-dashed border-border hover:border-primary/50 bg-muted/20 p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors"
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*,.heic,.heif"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files) addFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-          <div className="w-12 h-12 border border-border bg-card flex items-center justify-center">
-            <Upload className="w-6 h-6 text-muted-foreground" />
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-bold uppercase tracking-wide">Drop photos & videos here or click to browse</p>
-            <p className="font-mono text-xs text-muted-foreground mt-1">multi-select · JPG PNG WebP · HEIC auto-converts on-device · MP4 WebM MOV</p>
-          </div>
-          <Button variant="outline" className="pointer-events-none font-mono text-xs uppercase tracking-wide rounded-none">
-            Select Files
-          </Button>
-          {heicProgress && (
-            <p className="font-mono text-xs text-primary flex items-center gap-2">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Converting HEIC on-device… {heicProgress.done}/{heicProgress.total}
-            </p>
-          )}
-        </div>
+        <FileDropzone
+          accept="image/*,video/*,.heic,.heif"
+          onFiles={(files) => addFiles(files)}
+          formatsLine="JPG PNG WebP · HEIC auto-converts · MP4 WebM MOV"
+          progress={heicProgress}
+        />
 
         {/* timeline order */}
         {clips.length > 0 && (
@@ -869,10 +793,61 @@ export function VideoMontageTool() {
         )}
 
         {/* duration + motion settings */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border border-border bg-muted/10 p-3">
+          <span className="font-mono text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Format</span>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant={orientation === "landscape" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFormat("landscape")}
+              disabled={playing || exporting}
+              className="rounded-none font-mono text-xs uppercase"
+            >
+              16:9
+            </Button>
+            <Button
+              variant={orientation === "portrait" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFormat("portrait")}
+              disabled={playing || exporting}
+              className="rounded-none font-mono text-xs uppercase"
+            >
+              9:16
+            </Button>
+          </div>
+          {orientation === "portrait" && (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Fit</span>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={portraitFit === "width" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFormat("portrait", "width")}
+                  disabled={playing || exporting}
+                  className="rounded-none font-mono text-xs uppercase"
+                  title="Scale to canvas width"
+                >
+                  Width
+                </Button>
+                <Button
+                  variant={portraitFit === "height" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFormat("portrait", "height")}
+                  disabled={playing || exporting}
+                  className="rounded-none font-mono text-xs uppercase"
+                  title="Scale to canvas height"
+                >
+                  Height
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="border border-border bg-muted/10 p-3 space-y-2">
-            <span className="font-mono text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Clip length</span>
-            <div className="grid grid-cols-2 gap-2">
+            <p className="font-mono text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Clip length</p>
+            <div className="grid grid-cols-2 gap-2" title={durationMode === "full" ? "Videos play in full; photos hold the seconds value." : "Every clip plays exactly the seconds value."}>
               <Button
                 variant={durationMode === "full" ? "default" : "outline"}
                 size="sm"
@@ -890,14 +865,9 @@ export function VideoMontageTool() {
                 Timeframe
               </Button>
             </div>
-            <p className="font-mono text-[10px] text-muted-foreground leading-relaxed">
-              {durationMode === "full"
-                ? "Videos play in full; photos hold the timeframe value below."
-                : "Every clip — photo or video slice — plays exactly the timeframe below."}
-            </p>
             <div className="flex items-center gap-2">
               <Label htmlFor="fixed-secs" className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-bold whitespace-nowrap">
-                Timeframe (s)
+                Length (s)
               </Label>
               <Input
                 id="fixed-secs"
@@ -913,31 +883,30 @@ export function VideoMontageTool() {
           </div>
 
           <div className="border border-border bg-muted/10 p-3 space-y-2">
-            <span className="font-mono text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Motion & sound</span>
-            <label className="flex items-center gap-2 cursor-pointer font-mono text-xs">
+            <p className="font-mono text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Motion & sound</p>
+            <label className="flex items-center gap-2 cursor-pointer font-mono text-xs" title="Slow zoom across each photo">
               <input type="checkbox" checked={photoPan} onChange={(e) => setPhotoPan(e.target.checked)} className="rounded-none" />
-              Subtle pan on photos <span className="text-muted-foreground">(Ken Burns)</span>
+              Subtle zoom
             </label>
-            <label className="flex items-center gap-2 cursor-pointer font-mono text-xs">
-              <input type="checkbox" checked={videoPan} onChange={(e) => setVideoPan(e.target.checked)} className="rounded-none" />
-              Slight drift on videos
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer font-mono text-xs">
+            <label className="flex items-center gap-2 cursor-pointer font-mono text-xs" title="Silence clip audio for the music bed">
               <input type="checkbox" checked={muteClips} onChange={(e) => setMuteClips(e.target.checked)} className="rounded-none" />
-              Mute all clip audio <span className="text-muted-foreground">(for music bed)</span>
+              Mute clips
             </label>
+            {reduceMotion && (
+              <p className="font-mono text-[10px] text-muted-foreground">Static — OS reduced motion is on.</p>
+            )}
           </div>
         </div>
 
         {/* music */}
         <div className="border border-border bg-muted/10 p-3 space-y-3">
-          <span className="font-mono text-[10px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1.5">
-            <Music className="w-3.5 h-3.5" /> Background music
-          </span>
+          <p className="font-mono text-[10px] uppercase tracking-widest font-bold text-muted-foreground flex items-center gap-1.5">
+            <Music className="w-3.5 h-3.5" /> Music
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_110px] gap-2">
             <div className="space-y-1">
               <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-bold flex items-center gap-1">
-                <LinkIcon className="w-3 h-3" /> YouTube link (preview timing)
+                <LinkIcon className="w-3 h-3" /> YouTube link
               </Label>
               <Input
                 value={ytUrl}
@@ -948,12 +917,12 @@ export function VideoMontageTool() {
               />
               {ytUrl.trim() !== "" && (
                 <p className={`font-mono text-[10px] ${ytId ? "text-primary" : "text-destructive"}`}>
-                  {ytId ? `✓ cueing video ${ytId} from ${formatTime(ytStart)} in preview` : "✗ not a recognised YouTube URL"}
+                  {ytId ? `✓ preview from ${formatTime(ytStart)}` : "✗ bad link"}
                 </p>
               )}
             </div>
             <div className="space-y-1">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Start at (s)</Label>
+              <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Start (s)</Label>
               <Input
                 type="number"
                 min={0}
@@ -979,7 +948,7 @@ export function VideoMontageTool() {
           <div className="flex flex-col sm:flex-row sm:items-end gap-2">
             <div className="flex-1 space-y-1">
               <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
-                Audio file for export mix <span className="text-primary">(required for sound in export)</span>
+                Audio file
               </Label>
               <div className="flex items-center gap-2">
                 <input
@@ -1016,7 +985,7 @@ export function VideoMontageTool() {
               </div>
             </div>
             <div className="space-y-1 w-full sm:w-28">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Start at (s)</Label>
+              <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Start (s)</Label>
               <Input
                 type="number"
                 min={0}
@@ -1029,8 +998,7 @@ export function VideoMontageTool() {
           </div>
           <audio ref={musicRef} src={musicUrl ?? undefined} preload="auto" className="hidden" />
           <p className="font-mono text-[10px] text-muted-foreground leading-relaxed">
-            YouTube audio can&apos;t be pulled into an on-device export (Google blocks it) — the embed above is for timing, while the
-            uploaded audio file is what actually gets mixed under your muted clips.
+            YouTube cues preview only — export sound needs the audio file.
           </p>
         </div>
 
@@ -1038,7 +1006,7 @@ export function VideoMontageTool() {
         <div className="space-y-3 border-t border-border pt-4">
           <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest">
             <span className="font-bold text-muted-foreground">
-              Preview · 1280×720
+              Preview · {dims.w}×{dims.h}
               {clips.length > 0 && (
                 <> · clip {Math.min(activeIndex + 1, clips.length)}/{clips.length} · {formatTime(playhead)} / {formatTime(total)}</>
               )}
@@ -1046,7 +1014,13 @@ export function VideoMontageTool() {
             {exporting && <span className="text-primary font-bold">Exporting {exportPct}%</span>}
           </div>
           <div className="border border-border bg-black">
-            <canvas ref={canvasRef} width={W} height={H} className="w-full aspect-video block" />
+            <canvas
+              ref={canvasRef}
+              width={dims.w}
+              height={dims.h}
+              className="w-full block"
+              style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
+            />
           </div>
           {total > 0 && (
             <div className="flex items-center gap-2">
@@ -1089,12 +1063,8 @@ export function VideoMontageTool() {
             </Button>
           </div>
           <p className="font-mono text-[10px] text-muted-foreground leading-relaxed">
-            {mp4Ready
-              ? "MP4 container where supported, WebM fallback. "
-              : "This browser can't mux MP4 — exporting WebM instead. "}
-            {!musicFile && clips.length > 0 && (
-              <>No audio file attached — the export will be silent (a YouTube link alone can&apos;t be baked in).</>
-            )}
+            {!mp4Ready && <>No MP4 here — WebM instead. </>}
+            {!musicFile && clips.length > 0 && <>No audio file — export will be silent.</>}
           </p>
 
           {error && (
@@ -1116,15 +1086,16 @@ export function VideoMontageTool() {
                   </Button>
                 </a>
               </div>
-              <video src={outputUrl} controls playsInline className="w-full aspect-video bg-black" />
+              <video
+                src={outputUrl}
+                controls
+                playsInline
+                className="w-full bg-black block"
+                style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
+              />
             </div>
           )}
         </div>
-
-        <p className="font-mono text-[10px] text-muted-foreground flex items-center gap-1.5">
-          <Shield className="w-3 h-3" /> Clips and audio render locally via canvas + MediaRecorder. Only the optional YouTube embed
-          streams from Google, for cueing.
-        </p>
       </CardContent>
     </Card>
   );
