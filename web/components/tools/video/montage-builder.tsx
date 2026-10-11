@@ -65,6 +65,44 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+const HEIC_TYPES = new Set([
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+]);
+const HEIC_EXT = /\.(heic|heif|hif)$/i;
+const VIDEO_EXT = /\.(mp4|m4v|mov|webm|ogv)$/i;
+const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif|bmp|svg)$/i;
+
+function blankType(t: string): boolean {
+  return t === "" || t === "application/octet-stream";
+}
+
+function looksHeic(name: string, type: string): boolean {
+  return HEIC_TYPES.has(type) || (blankType(type) && HEIC_EXT.test(name));
+}
+
+/** Resolve true if this browser can natively decode the image at url. */
+function canDecodeImage(url: string, timeoutMs = 9000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = window.setTimeout(() => {
+      img.src = "";
+      resolve(false);
+    }, timeoutMs);
+    img.onload = () => {
+      window.clearTimeout(timer);
+      resolve(img.naturalWidth > 0);
+    };
+    img.onerror = () => {
+      window.clearTimeout(timer);
+      resolve(false);
+    };
+    img.src = url;
+  });
+}
+
 export function VideoMontageTool() {
   const [clips, setClips] = useState<Clip[]>([]);
   const [durationMode, setDurationMode] = useState<"full" | "fixed">("fixed");
@@ -84,7 +122,10 @@ export function VideoMontageTool() {
   const [exportPct, setExportPct] = useState(0);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [outputSize, setOutputSize] = useState<number | null>(null);
+  const [outputExt, setOutputExt] = useState<"mp4" | "webm">("mp4");
   const [error, setError] = useState<string | null>(null);
+  // Bumped when async media decodes, to repaint the idle poster with fresh state.
+  const [, setMediaTick] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +133,7 @@ export function VideoMontageTool() {
   const musicRef = useRef<HTMLAudioElement>(null);
   const imgCache = useRef(new Map<string, HTMLImageElement>());
   const vidCache = useRef(new Map<string, HTMLVideoElement>());
-  const playState = useRef({ playing: false, t0: 0, offset: 0 });
+  const playState = useRef({ playing: false, t0: -1, offset: 0, lastTs: -1 });
   const rafRef = useRef(0);
   const activeVidRef = useRef<string | null>(null);
   const lastIdxRef = useRef(-1);
@@ -111,6 +152,15 @@ export function VideoMontageTool() {
   }, [musicUrl]);
 
   const ytId = useMemo(() => (ytUrl ? parseYouTubeId(ytUrl) : null), [ytUrl]);
+
+  /** True when this browser can mux MP4 — decides the export button label up front. */
+  const mp4Ready = useMemo(() => {
+    try {
+      return typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/mp4");
+    } catch {
+      return false;
+    }
+  }, []);
 
   const durations = useMemo(
     () =>
@@ -165,45 +215,92 @@ export function VideoMontageTool() {
   // ---------- file intake ----------
 
   function addFiles(files: FileList | File[]) {
-    const list = Array.from(files);
-    if (list.length === 0) return;
-    const fresh: Clip[] = [];
-    for (const f of list) {
-      const isVideo = f.type.startsWith("video/");
-      const isImage = f.type.startsWith("image/");
-      if (!isVideo && !isImage) continue;
-      const url = URL.createObjectURL(f);
-      const clip: Clip = {
-        id: uid(),
-        file: f,
-        kind: isVideo ? "video" : "image",
-        url,
-        name: f.name,
-        size: f.size,
-      };
-      fresh.push(clip);
-      if (isVideo) {
-        const probe = document.createElement("video");
-        probe.preload = "metadata";
-        probe.src = url;
-        probe.onloadedmetadata = () => {
-          const d = probe.duration;
-          probe.removeAttribute("src");
-          if (isFinite(d) && d > 0) {
-            setClips((prev) =>
-              prev.map((c) => (c.id === clip.id ? { ...c, naturalDuration: d } : c))
-            );
+    void (async () => {
+      const list = Array.from(files);
+      if (list.length === 0) return;
+      const fresh: Clip[] = [];
+      const heicBlocked: string[] = [];
+      const skipped: string[] = [];
+      for (const f of list) {
+        const t = f.type.toLowerCase();
+        const isHeic = looksHeic(f.name, t);
+        // Trust the MIME type first; fall back to extension when the OS reports nothing.
+        const isVideo =
+          t.startsWith("video/") || (blankType(t) && VIDEO_EXT.test(f.name) && !isHeic);
+        const isImage =
+          (t.startsWith("image/") && !HEIC_TYPES.has(t)) ||
+          (blankType(t) && IMAGE_EXT.test(f.name));
+        if (!isVideo && !isImage && !isHeic) {
+          skipped.push(f.name);
+          continue;
+        }
+        const url = URL.createObjectURL(f);
+        if (isHeic) {
+          // HEIC/HEIF only decodes natively in some browsers (Safari). Probe before
+          // adding so a black frame never lands silently on the timeline.
+          const ok = await canDecodeImage(url);
+          if (!ok) {
+            URL.revokeObjectURL(url);
+            heicBlocked.push(f.name);
+            continue;
           }
+        }
+        const clip: Clip = {
+          id: uid(),
+          file: f,
+          kind: isVideo ? "video" : "image",
+          url,
+          name: f.name,
+          size: f.size,
         };
+        fresh.push(clip);
+        if (isVideo) {
+          const probe = document.createElement("video");
+          probe.preload = "metadata";
+          probe.src = url;
+          probe.onloadedmetadata = () => {
+            const d = probe.duration;
+            probe.removeAttribute("src");
+            if (isFinite(d) && d > 0) {
+              setClips((prev) =>
+                prev.map((c) => (c.id === clip.id ? { ...c, naturalDuration: d } : c))
+              );
+            }
+          };
+        }
       }
-    }
-    if (fresh.length === 0) {
-      setError("No images or videos in that selection — try JPG/PNG/WebP or MP4/WebM/MOV.");
-      return;
-    }
-    setError(null);
-    setOutputUrl(null);
-    setClips((prev) => [...prev, ...fresh]);
+      if (fresh.length === 0) {
+        if (heicBlocked.length > 0) {
+          setError(
+            `This browser can't decode HEIC/HEIF photos (${heicBlocked.join(", ")}). Convert to JPG first — on iPhone: Settings → Camera → Formats → Most Compatible, or export the shot as JPG and retry.`
+          );
+        } else {
+          const extra = skipped.length > 0 ? ` Skipped: ${skipped.join(", ")}.` : "";
+          setError(`No images or videos in that selection — try JPG/PNG/WebP/HEIC or MP4/WebM/MOV.${extra}`);
+        }
+        return;
+      }
+      if (heicBlocked.length > 0 || skipped.length > 0) {
+        const bits = [
+          heicBlocked.length > 0
+            ? `HEIC skipped (convert to JPG): ${heicBlocked.join(", ")}`
+            : "",
+          skipped.length > 0 ? `skipped: ${skipped.join(", ")}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        setError(`Added ${fresh.length} clip(s). ${bits}.`);
+      } else {
+        setError(null);
+      }
+      setOutputUrl(null);
+      setClips((prev) => [...prev, ...fresh]);
+      // Kick off decoding immediately so posters/frames are ready, not black.
+      for (const clip of fresh) {
+        if (clip.kind === "image") getImage(clip);
+        else getVideoEl(clip);
+      }
+    })();
   }
 
   function removeClip(id: string) {
@@ -251,16 +348,28 @@ export function VideoMontageTool() {
     vidCache.current.clear();
     activeVidRef.current = null;
     lastIdxRef.current = -1;
+    lastShownRef.current = 0;
     setOutputUrl(null);
     setPlayhead(0);
   }
 
   // ---------- media caches ----------
 
+  /** Repaint the idle canvas (poster). No-op while playing — the rAF loop owns the canvas then. */
+  function redrawIdle() {
+    if (!playState.current.playing) {
+      lastIdxRef.current = -1;
+      drawFrame(lastShownRef.current >= 0 ? lastShownRef.current : 0);
+    }
+  }
+
   function getImage(clip: Clip): HTMLImageElement | null {
     let img = imgCache.current.get(clip.id);
     if (!img) {
       img = new Image();
+      // Re-render on decode: the idle effect then repaints with fresh clips.
+      // (Never draw from this stale closure — it would paint over with old state.)
+      img.onload = () => setMediaTick((x) => x + 1);
       img.src = clip.url;
       imgCache.current.set(clip.id, img);
     }
@@ -271,6 +380,8 @@ export function VideoMontageTool() {
     let v = vidCache.current.get(clip.id);
     if (!v) {
       v = document.createElement("video");
+      v.oncanplay = () => setMediaTick((x) => x + 1);
+      v.onseeked = () => setMediaTick((x) => x + 1);
       v.src = clip.url;
       v.muted = true;
       v.playsInline = true;
@@ -341,12 +452,9 @@ export function VideoMontageTool() {
     }
   }
 
-  // Redraw the idle frame when the timeline changes (poster for clip 1).
+  // Redraw the idle frame when the timeline changes (poster at last shown position).
   useEffect(() => {
-    if (!playState.current.playing) {
-      lastIdxRef.current = -1;
-      drawFrame(0);
-    }
+    redrawIdle();
   });
 
   // ---------- transport ----------
@@ -379,6 +487,9 @@ export function VideoMontageTool() {
   function tick(ts: number) {
     const st = playState.current;
     if (!st.playing) return;
+    // Single clock: seed t0 from the first frame timestamp, never wall-clock.
+    if (st.t0 < 0) st.t0 = ts;
+    st.lastTs = ts;
     const now = (ts - st.t0) / 1000 + st.offset;
     if (now >= total) {
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
@@ -410,7 +521,7 @@ export function VideoMontageTool() {
     if (clips.length === 0 || total <= 0) return;
     setError(null);
     lastIdxRef.current = -1;
-    playState.current = { playing: true, t0: performance.now(), offset: from };
+    playState.current = { playing: true, t0: -1, offset: from, lastTs: -1 };
     setPlaying(true);
     syncVideos(clipIndexAt(from), true);
     if (musicRef.current && musicUrl) {
@@ -430,7 +541,8 @@ export function VideoMontageTool() {
   function togglePlay() {
     if (playing) {
       const st = playState.current;
-      const now = (performance.now() - st.t0) / 1000 + st.offset;
+      const now =
+        st.t0 < 0 || st.lastTs < 0 ? st.offset : (st.lastTs - st.t0) / 1000 + st.offset;
       st.offset = Math.min(now, total);
       stopPlayback();
       lastShownRef.current = st.offset;
@@ -440,14 +552,65 @@ export function VideoMontageTool() {
     }
   }
 
+  /** Jump the playhead. Continues playing from `to` if playing, else repaints idle. */
+  function seek(to: number) {
+    if (total <= 0 || exporting) return;
+    const t = Math.min(Math.max(0, to), total);
+    lastShownRef.current = t;
+    setPlayhead(t);
+    setOutputUrl(null);
+    // Force the loop (or next play) to resync clip video + music to the new position.
+    lastIdxRef.current = -1;
+    activeVidRef.current = null;
+    const i = clipIndexAt(t);
+    const clip = clips[i];
+    if (playState.current.playing) {
+      playState.current.offset = t;
+      playState.current.t0 = -1;
+      for (const v of vidCache.current.values()) v.pause();
+      syncVideos(i, true);
+      if (clip?.kind === "video") {
+        const v = getVideoEl(clip);
+        try {
+          v.currentTime = Math.min(Math.max(0, t - starts[i]), v.duration || t - starts[i]);
+        } catch {
+          // metadata not ready — loop resyncs once it is
+        }
+      }
+      if (musicRef.current && musicUrl) {
+        try {
+          musicRef.current.currentTime = Math.min(
+            musicOffset + t,
+            Math.max(0, (musicRef.current.duration || 0) - 0.25)
+          );
+        } catch {
+          // duration unknown until metadata loads
+        }
+      }
+    } else {
+      for (const v of vidCache.current.values()) v.pause();
+      syncVideos(i, false);
+      if (clip?.kind === "video") {
+        const v = getVideoEl(clip);
+        try {
+          v.currentTime = Math.min(Math.max(0, t - starts[i]), v.duration || t - starts[i]);
+        } catch {
+          // metadata not ready — canplay repaint covers it
+        }
+      }
+      drawFrame(t);
+    }
+  }
+
   // ---------- export ----------
 
   function pickMime(): string {
+    // MP4 first (plays everywhere); WebM VP9/VP8 as on-device fallback.
     const cands = [
+      "video/mp4",
       "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
       "video/webm",
-      "video/mp4",
     ];
     for (const c of cands) {
       try {
@@ -502,6 +665,7 @@ export function VideoMontageTool() {
       };
       rec.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "video/webm" });
+        setOutputExt(rec.mimeType.includes("mp4") ? "mp4" : "webm");
         setOutputUrl(URL.createObjectURL(blob));
         setOutputSize(blob.size);
         setExporting(false);
@@ -512,7 +676,7 @@ export function VideoMontageTool() {
         setPlayhead(total);
       };
       rec.onerror = () => {
-        setError("Recording failed in this browser — try Chrome or Edge for WebM export.");
+        setError("Recording failed in this browser — try Chrome or Edge for MP4/WebM export.");
         setExporting(false);
         recorderRef.current = null;
         stopPlayback();
@@ -567,7 +731,7 @@ export function VideoMontageTool() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,video/*"
+            accept="image/*,video/*,.heic,.heif"
             multiple
             className="hidden"
             onChange={(e) => {
@@ -580,7 +744,7 @@ export function VideoMontageTool() {
           </div>
           <div className="text-center">
             <p className="text-sm font-bold uppercase tracking-wide">Drop photos & videos here or click to browse</p>
-            <p className="font-mono text-xs text-muted-foreground mt-1">multi-select · JPG PNG WebP · MP4 WebM MOV</p>
+            <p className="font-mono text-xs text-muted-foreground mt-1">multi-select · JPG PNG WebP HEIC · MP4 WebM MOV</p>
           </div>
           <Button variant="outline" className="pointer-events-none font-mono text-xs uppercase tracking-wide rounded-none">
             Select Files
@@ -834,9 +998,25 @@ export function VideoMontageTool() {
           <div className="border border-border bg-black">
             <canvas ref={canvasRef} width={W} height={H} className="w-full aspect-video block" />
           </div>
-          {(playing || exporting || playhead > 0) && total > 0 && (
-            <div className="h-1 bg-muted overflow-hidden">
-              <div className="h-full bg-primary transition-none" style={{ width: `${Math.min(100, (playhead / total) * 100)}%` }} />
+          {total > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                {formatTime(Math.min(playhead, total))}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={total}
+                step={0.01}
+                value={Math.min(playhead, total)}
+                onChange={(e) => seek(Number(e.target.value))}
+                disabled={exporting}
+                aria-label="Scrub timeline"
+                className="w-full h-1 accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                {formatTime(total)}
+              </span>
             </div>
           )}
           <div className="flex flex-col sm:flex-row gap-2">
@@ -855,9 +1035,17 @@ export function VideoMontageTool() {
               className="flex-1 rounded-none font-mono text-xs uppercase tracking-widest font-bold"
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {exporting ? `Recording… ${exportPct}%` : "Export WebM"}
+              {exporting ? `Recording… ${exportPct}%` : mp4Ready ? "Export MP4" : "Export WebM"}
             </Button>
           </div>
+          <p className="font-mono text-[10px] text-muted-foreground leading-relaxed">
+            {mp4Ready
+              ? "MP4 container where supported, WebM fallback. "
+              : "This browser can't mux MP4 — exporting WebM instead. "}
+            {!musicFile && clips.length > 0 && (
+              <>No audio file attached — the export will be silent (a YouTube link alone can&apos;t be baked in).</>
+            )}
+          </p>
 
           {error && (
             <Alert variant="destructive" className="rounded-none">
@@ -872,9 +1060,9 @@ export function VideoMontageTool() {
                 <span className="font-mono text-xs font-bold uppercase tracking-widest text-primary">
                   Export ready {outputSize ? `· ${formatBytes(outputSize)}` : ""}
                 </span>
-                <a href={outputUrl} download="montage.webm">
+                <a href={outputUrl} download={`montage.${outputExt}`}>
                   <Button size="sm" className="rounded-none font-mono text-xs">
-                    <Download className="w-3.5 h-3.5" /> Download montage.webm
+                    <Download className="w-3.5 h-3.5" /> Download montage.{outputExt}
                   </Button>
                 </a>
               </div>
