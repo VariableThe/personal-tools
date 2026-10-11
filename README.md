@@ -14,7 +14,7 @@ When using the web interface (`web/`), **all operations are executed entirely on
 
 ---
 
-## 🧰 Available Tools Suite (17 Utilities)
+## 🧰 Available Tools Suite (18 Utilities)
 
 ### 📂 PDF Suite
 | Tool Name | Web Interface | Description |
@@ -38,6 +38,12 @@ When using the web interface (`web/`), **all operations are executed entirely on
 | **Redact & Blur Info** | Built-in | Interactive canvas where you can click and drag rectangles over sensitive data (faces, IDs, passwords) to pixelate them. |
 | **Image to Text (OCR)** | Built-in | Extract editable optical character text from screenshots or document scans using Tesseract WASM. |
 | **Color Extractor & Masker** | Built-in | Eyedropper tool to pick exact RGB colors from canvas and generate transparent cutouts based on tolerance. |
+
+### 🎬 Video Suite
+| Tool Name | Web Interface | Description |
+| :--- | :--- | :--- |
+| **Montage Builder** | Built-in | Order photos + clips, add drift motion, lay background music under muted footage, export one reel. |
+| **Keep or Discard** | Built-in | Step through a batch of photos + videos one by one and split them into a keep pile and a discard pile, exported as ZIPs. |
 
 ### 📊 Data & Code Utilities
 | Tool Name | CLI Script | Web Interface | Description |

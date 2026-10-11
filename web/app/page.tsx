@@ -19,6 +19,7 @@ import {
   Image as ImageIcon,
   Presentation,
   Clapperboard,
+  ListChecks,
   Zap,
   Mic,
   Search,
@@ -50,6 +51,7 @@ import { ImageUpscalerTool } from "@/components/tools/image/image-upscaler";
 import { XmlToCsvTool } from "@/components/tools/xml-to-csv";
 import { AudioTranscriberTool } from "@/components/tools/audio/audio-transcriber";
 import { VideoMontageTool } from "@/components/tools/video/montage-builder";
+import { KeepDiscardTool } from "@/components/tools/video/keep-or-discard";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -98,7 +100,10 @@ const CATEGORIES: Record<string, { label: string; icon: LucideIcon; tools: ToolD
   video: {
     label: "Video",
     icon: Clapperboard,
-    tools: [{ id: "montage", label: "Montage Builder", icon: Clapperboard }],
+    tools: [
+      { id: "montage", label: "Montage Builder", icon: Clapperboard },
+      { id: "sort", label: "Keep or Discard", icon: ListChecks },
+    ],
   },
   data: {
     label: "Data",
@@ -391,9 +396,9 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="video" className="space-y-6">
-            {query.trim() && renderGlobalResults()}
+            {renderSubRow("video")}
             <div className="max-w-4xl mx-auto">
-              <VideoMontageTool />
+              {shownTool("video") === "sort" ? <KeepDiscardTool /> : <VideoMontageTool />}
             </div>
           </TabsContent>
 
