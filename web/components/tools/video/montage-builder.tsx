@@ -28,6 +28,7 @@ import {
   formatBytes,
   type MediaItem,
 } from "@/lib/media-files";
+import { fetchYouTubeAudio } from "@/lib/yt-audio";
 import { FileDropzone } from "@/components/tools/video/file-dropzone";
 
 const LANDSCAPE = { w: 1280, h: 720 };
@@ -42,6 +43,8 @@ interface Clip {
   name: string;
   size: number;
   naturalDuration?: number;
+  /** Set when this browser can't decode the clip (e.g. HEVC on Chrome). */
+  unplayable?: boolean;
 }
 
 /** Adapt a shared MediaItem to a timeline clip. */
@@ -83,6 +86,9 @@ export function VideoMontageTool() {
 
   const [ytUrl, setYtUrl] = useState("");
   const [ytStart, setYtStart] = useState(0);
+  const [ytFetching, setYtFetching] = useState(false);
+  const [ytFetchError, setYtFetchError] = useState<string | null>(null);
+  const [ytTitle, setYtTitle] = useState<string | null>(null);
   const [musicFile, setMusicFile] = useState<File | null>(null);
   const [musicOffset, setMusicOffset] = useState(0);
 
@@ -251,6 +257,7 @@ export function VideoMontageTool() {
           else {
             getVideoEl(clip);
             probeVideoDuration(clip);
+            probePlayability(clip);
           }
         }
       }
@@ -609,6 +616,57 @@ export function VideoMontageTool() {
     if (f) setPortraitFit(f);
   }
 
+  /** Flag video clips this browser can't decode (e.g. HEVC on Chrome). */
+  function probePlayability(clip: Clip) {
+    if (clip.kind !== "video") return;
+    const v = getVideoEl(clip) as HTMLVideoElement & { __mpbProbed?: boolean };
+    if (v.__mpbProbed) return;
+    v.__mpbProbed = true;
+    const mark = (bad: boolean) =>
+      setClips((prev) =>
+        prev.map((c) => (c.id === clip.id ? { ...c, unplayable: bad } : c))
+      );
+    if (v.error) {
+      mark(true);
+      return;
+    }
+    if (v.readyState >= 2) {
+      mark(false);
+      return;
+    }
+    const timer = window.setTimeout(() => mark(v.readyState < 2), 8000);
+    v.addEventListener("error", () => {
+      window.clearTimeout(timer);
+      mark(true);
+    });
+    v.addEventListener(
+      "canplay",
+      () => {
+        window.clearTimeout(timer);
+        mark(false);
+      },
+      { once: true }
+    );
+  }
+
+  /** Pull the YouTube link's audio in as the music file (preview + export). */
+  async function fetchYtAudio() {
+    if (!ytId || ytFetching) return;
+    setYtFetching(true);
+    setYtFetchError(null);
+    try {
+      const { file, title } = await fetchYouTubeAudio(ytId);
+      setMusicFile(file);
+      setMusicOffset(ytStart);
+      setYtTitle(title);
+      setOutputUrl(null);
+    } catch (e) {
+      setYtFetchError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setYtFetching(false);
+    }
+  }
+
   /** Jump the playhead. Continues playing from `to` if playing, else repaints idle. */
   function seek(to: number) {
     if (total <= 0 || exporting) return;
@@ -831,6 +889,7 @@ export function VideoMontageTool() {
                     <span className="text-muted-foreground">
                       {formatBytes(c.size)} · plays {formatTime(durations[i] ?? 0)}
                       {c.kind === "video" && c.naturalDuration ? ` (full ${formatTime(c.naturalDuration)})` : ""}
+                      {c.unplayable && <span className="text-destructive"> · can&apos;t play here — convert to H.264</span>}
                     </span>
                   </span>
                   <span className="flex shrink-0">
@@ -996,6 +1055,30 @@ export function VideoMontageTool() {
             </div>
           </div>
           {ytId && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void fetchYtAudio()}
+                disabled={ytFetching}
+                className="rounded-none font-mono text-xs"
+              >
+                {ytFetching ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                {ytFetching ? "Fetching audio…" : "Fetch audio from link"}
+              </Button>
+              {ytFetchError && (
+                <span className="font-mono text-[10px] text-destructive">{ytFetchError}</span>
+              )}
+              {!ytFetchError && !ytFetching && ytTitle && (
+                <span className="font-mono text-[10px] text-primary truncate">✓ {ytTitle}</span>
+              )}
+            </div>
+          )}
+          {ytId && (
             <div className="aspect-video w-full max-w-md border border-border bg-black">
               <iframe
                 key={`${ytId}-${Math.floor(ytStart)}`}
@@ -1060,7 +1143,7 @@ export function VideoMontageTool() {
           </div>
           <audio ref={musicRef} src={musicUrl ?? undefined} preload="auto" className="hidden" />
           <p className="font-mono text-[10px] text-muted-foreground leading-relaxed">
-            YouTube cues preview only — export sound needs the audio file.
+            Fetch pulls the song in for preview + export. Link alone stays silent.
           </p>
         </div>
 
