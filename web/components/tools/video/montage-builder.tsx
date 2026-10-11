@@ -85,6 +85,8 @@ export function VideoMontageTool() {
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [outputSize, setOutputSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped when async media decodes, to repaint the idle poster with fresh state.
+  const [, setMediaTick] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +94,7 @@ export function VideoMontageTool() {
   const musicRef = useRef<HTMLAudioElement>(null);
   const imgCache = useRef(new Map<string, HTMLImageElement>());
   const vidCache = useRef(new Map<string, HTMLVideoElement>());
-  const playState = useRef({ playing: false, t0: 0, offset: 0 });
+  const playState = useRef({ playing: false, t0: -1, offset: 0, lastTs: -1 });
   const rafRef = useRef(0);
   const activeVidRef = useRef<string | null>(null);
   const lastIdxRef = useRef(-1);
@@ -204,6 +206,11 @@ export function VideoMontageTool() {
     setError(null);
     setOutputUrl(null);
     setClips((prev) => [...prev, ...fresh]);
+    // Kick off decoding immediately so posters/frames are ready, not black.
+    for (const clip of fresh) {
+      if (clip.kind === "image") getImage(clip);
+      else getVideoEl(clip);
+    }
   }
 
   function removeClip(id: string) {
@@ -251,16 +258,28 @@ export function VideoMontageTool() {
     vidCache.current.clear();
     activeVidRef.current = null;
     lastIdxRef.current = -1;
+    lastShownRef.current = 0;
     setOutputUrl(null);
     setPlayhead(0);
   }
 
   // ---------- media caches ----------
 
+  /** Repaint the idle canvas (poster). No-op while playing — the rAF loop owns the canvas then. */
+  function redrawIdle() {
+    if (!playState.current.playing) {
+      lastIdxRef.current = -1;
+      drawFrame(lastShownRef.current >= 0 ? lastShownRef.current : 0);
+    }
+  }
+
   function getImage(clip: Clip): HTMLImageElement | null {
     let img = imgCache.current.get(clip.id);
     if (!img) {
       img = new Image();
+      // Re-render on decode: the idle effect then repaints with fresh clips.
+      // (Never draw from this stale closure — it would paint over with old state.)
+      img.onload = () => setMediaTick((x) => x + 1);
       img.src = clip.url;
       imgCache.current.set(clip.id, img);
     }
@@ -271,6 +290,7 @@ export function VideoMontageTool() {
     let v = vidCache.current.get(clip.id);
     if (!v) {
       v = document.createElement("video");
+      v.oncanplay = () => setMediaTick((x) => x + 1);
       v.src = clip.url;
       v.muted = true;
       v.playsInline = true;
@@ -341,12 +361,9 @@ export function VideoMontageTool() {
     }
   }
 
-  // Redraw the idle frame when the timeline changes (poster for clip 1).
+  // Redraw the idle frame when the timeline changes (poster at last shown position).
   useEffect(() => {
-    if (!playState.current.playing) {
-      lastIdxRef.current = -1;
-      drawFrame(0);
-    }
+    redrawIdle();
   });
 
   // ---------- transport ----------
@@ -379,6 +396,9 @@ export function VideoMontageTool() {
   function tick(ts: number) {
     const st = playState.current;
     if (!st.playing) return;
+    // Single clock: seed t0 from the first frame timestamp, never wall-clock.
+    if (st.t0 < 0) st.t0 = ts;
+    st.lastTs = ts;
     const now = (ts - st.t0) / 1000 + st.offset;
     if (now >= total) {
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
@@ -410,7 +430,7 @@ export function VideoMontageTool() {
     if (clips.length === 0 || total <= 0) return;
     setError(null);
     lastIdxRef.current = -1;
-    playState.current = { playing: true, t0: performance.now(), offset: from };
+    playState.current = { playing: true, t0: -1, offset: from, lastTs: -1 };
     setPlaying(true);
     syncVideos(clipIndexAt(from), true);
     if (musicRef.current && musicUrl) {
@@ -430,7 +450,8 @@ export function VideoMontageTool() {
   function togglePlay() {
     if (playing) {
       const st = playState.current;
-      const now = (performance.now() - st.t0) / 1000 + st.offset;
+      const now =
+        st.t0 < 0 || st.lastTs < 0 ? st.offset : (st.lastTs - st.t0) / 1000 + st.offset;
       st.offset = Math.min(now, total);
       stopPlayback();
       lastShownRef.current = st.offset;
