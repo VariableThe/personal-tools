@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { convertHeicToJpeg, runPool } from "@/lib/heic-convert";
 
 const W = 1280;
 const H = 720;
@@ -126,6 +127,8 @@ export function VideoMontageTool() {
   const [error, setError] = useState<string | null>(null);
   // Bumped when async media decodes, to repaint the idle poster with fresh state.
   const [, setMediaTick] = useState(0);
+  // HEIC conversion progress ({done, total}) while a batch decodes.
+  const [heicProgress, setHeicProgress] = useState<{ done: number; total: number } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -214,12 +217,27 @@ export function VideoMontageTool() {
 
   // ---------- file intake ----------
 
+  function probeVideoDuration(clip: Clip) {
+    const probe = document.createElement("video");
+    probe.preload = "metadata";
+    probe.src = clip.url;
+    probe.onloadedmetadata = () => {
+      const d = probe.duration;
+      probe.removeAttribute("src");
+      if (isFinite(d) && d > 0) {
+        setClips((prev) =>
+          prev.map((c) => (c.id === clip.id ? { ...c, naturalDuration: d } : c))
+        );
+      }
+    };
+  }
+
   function addFiles(files: FileList | File[]) {
     void (async () => {
       const list = Array.from(files);
       if (list.length === 0) return;
-      const fresh: Clip[] = [];
-      const heicBlocked: string[] = [];
+      const fast: Clip[] = [];
+      const heicQueue: { f: File; url: string }[] = [];
       const skipped: string[] = [];
       for (const f of list) {
         const t = f.type.toLowerCase();
@@ -230,75 +248,101 @@ export function VideoMontageTool() {
         const isImage =
           (t.startsWith("image/") && !HEIC_TYPES.has(t)) ||
           (blankType(t) && IMAGE_EXT.test(f.name));
-        if (!isVideo && !isImage && !isHeic) {
-          skipped.push(f.name);
-          continue;
-        }
         const url = URL.createObjectURL(f);
-        if (isHeic) {
-          // HEIC/HEIF only decodes natively in some browsers (Safari). Probe before
-          // adding so a black frame never lands silently on the timeline.
-          const ok = await canDecodeImage(url);
-          if (!ok) {
-            URL.revokeObjectURL(url);
-            heicBlocked.push(f.name);
-            continue;
+        if (isVideo) {
+          fast.push({
+            id: uid(),
+            file: f,
+            kind: "video",
+            url,
+            name: f.name,
+            size: f.size,
+          });
+        } else if (isHeic) {
+          heicQueue.push({ f, url });
+        } else if (isImage) {
+          fast.push({
+            id: uid(),
+            file: f,
+            kind: "image",
+            url,
+            name: f.name,
+            size: f.size,
+          });
+        } else {
+          URL.revokeObjectURL(url);
+          skipped.push(f.name);
+        }
+      }
+
+      // Fast batch lands immediately — videos and natively-decodable images.
+      if (fast.length > 0) {
+        setError(null);
+        setOutputUrl(null);
+        setClips((prev) => [...prev, ...fast]);
+        for (const clip of fast) {
+          if (clip.kind === "image") getImage(clip);
+          else {
+            getVideoEl(clip);
+            probeVideoDuration(clip);
           }
         }
-        const clip: Clip = {
-          id: uid(),
-          file: f,
-          kind: isVideo ? "video" : "image",
-          url,
-          name: f.name,
-          size: f.size,
-        };
-        fresh.push(clip);
-        if (isVideo) {
-          const probe = document.createElement("video");
-          probe.preload = "metadata";
-          probe.src = url;
-          probe.onloadedmetadata = () => {
-            const d = probe.duration;
-            probe.removeAttribute("src");
-            if (isFinite(d) && d > 0) {
-              setClips((prev) =>
-                prev.map((c) => (c.id === clip.id ? { ...c, naturalDuration: d } : c))
-              );
+      }
+
+      // HEIC batch: native decode where supported (instant), else on-device
+      // WASM conversion. Streams onto the timeline as each file finishes.
+      const failed: string[] = [];
+      if (heicQueue.length > 0) {
+        setHeicProgress({ done: 0, total: heicQueue.length });
+        await runPool(heicQueue, 3, async ({ f, url }) => {
+          try {
+            let clip: Clip;
+            if (await canDecodeImage(url, 8000)) {
+              clip = { id: uid(), file: f, kind: "image", url, name: f.name, size: f.size };
+            } else {
+              const jpeg = await convertHeicToJpeg(f);
+              URL.revokeObjectURL(url);
+              const jpgName = f.name.replace(/\.(heic|heif|hif)$/i, ".jpg");
+              const cUrl = URL.createObjectURL(jpeg);
+              clip = {
+                id: uid(),
+                file: new File([jpeg], jpgName, { type: "image/jpeg" }),
+                kind: "image",
+                url: cUrl,
+                name: `${f.name} → ${jpgName}`,
+                size: jpeg.size,
+              };
             }
-          };
-        }
+            setOutputUrl(null);
+            setClips((prev) => [...prev, clip]);
+            getImage(clip);
+          } catch {
+            URL.revokeObjectURL(url);
+            failed.push(f.name);
+          } finally {
+            setHeicProgress((p) => (p ? { done: p.done + 1, total: p.total } : p));
+          }
+        });
+        setHeicProgress(null);
       }
-      if (fresh.length === 0) {
-        if (heicBlocked.length > 0) {
-          setError(
-            `This browser can't decode HEIC/HEIF photos (${heicBlocked.join(", ")}). Convert to JPG first — on iPhone: Settings → Camera → Formats → Most Compatible, or export the shot as JPG and retry.`
-          );
-        } else {
-          const extra = skipped.length > 0 ? ` Skipped: ${skipped.join(", ")}.` : "";
-          setError(`No images or videos in that selection — try JPG/PNG/WebP/HEIC or MP4/WebM/MOV.${extra}`);
-        }
-        return;
-      }
-      if (heicBlocked.length > 0 || skipped.length > 0) {
-        const bits = [
-          heicBlocked.length > 0
-            ? `HEIC skipped (convert to JPG): ${heicBlocked.join(", ")}`
-            : "",
-          skipped.length > 0 ? `skipped: ${skipped.join(", ")}` : "",
-        ]
-          .filter(Boolean)
-          .join(" · ");
-        setError(`Added ${fresh.length} clip(s). ${bits}.`);
+
+      const problems = [
+        failed.length > 0 ? `couldn't decode: ${failed.join(", ")}` : "",
+        skipped.length > 0 ? `skipped: ${skipped.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const added = fast.length + (heicQueue.length - failed.length);
+      if (added === 0) {
+        setError(
+          failed.length > 0
+            ? `Couldn't decode those HEIC photos on-device (${failed.join(", ")}). Convert to JPG first — on iPhone: Settings → Camera → Formats → Most Compatible.`
+            : `No images or videos in that selection — try JPG/PNG/WebP/HEIC or MP4/WebM/MOV.${skipped.length > 0 ? ` Skipped: ${skipped.join(", ")}.` : ""}`
+        );
+      } else if (problems) {
+        setError(`Added ${added} clip(s). ${problems}.`);
       } else {
         setError(null);
-      }
-      setOutputUrl(null);
-      setClips((prev) => [...prev, ...fresh]);
-      // Kick off decoding immediately so posters/frames are ready, not black.
-      for (const clip of fresh) {
-        if (clip.kind === "image") getImage(clip);
-        else getVideoEl(clip);
       }
     })();
   }
@@ -744,11 +788,17 @@ export function VideoMontageTool() {
           </div>
           <div className="text-center">
             <p className="text-sm font-bold uppercase tracking-wide">Drop photos & videos here or click to browse</p>
-            <p className="font-mono text-xs text-muted-foreground mt-1">multi-select · JPG PNG WebP HEIC · MP4 WebM MOV</p>
+            <p className="font-mono text-xs text-muted-foreground mt-1">multi-select · JPG PNG WebP · HEIC auto-converts on-device · MP4 WebM MOV</p>
           </div>
           <Button variant="outline" className="pointer-events-none font-mono text-xs uppercase tracking-wide rounded-none">
             Select Files
           </Button>
+          {heicProgress && (
+            <p className="font-mono text-xs text-primary flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Converting HEIC on-device… {heicProgress.done}/{heicProgress.total}
+            </p>
+          )}
         </div>
 
         {/* timeline order */}
