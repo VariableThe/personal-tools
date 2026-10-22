@@ -152,7 +152,7 @@ export function WatermarkImageTool() {
 
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-muted-foreground block">Position</Label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {(
                       [
                         { id: "bottom-right", label: "Bottom Right" },

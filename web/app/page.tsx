@@ -110,7 +110,6 @@ const CATEGORIES: Record<string, { label: string; icon: LucideIcon; tools: ToolD
     icon: FileText,
     tools: [
       { id: "xml", label: "XML / Plist to CSV", icon: FileText },
-      { id: "color-data", label: "Color Extractor", icon: Pipette },
     ],
   },
 };
@@ -248,7 +247,7 @@ export default function Home() {
       <div className="space-y-3 border-b border-border pb-4">
         {groups.map((g) => (
           <div key={g.cat} className="flex items-center gap-3 flex-wrap justify-center">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-14 text-right">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-full text-center sm:w-14 sm:text-right">
               {g.label}
             </span>
             <div className="flex flex-wrap gap-2 justify-center">
@@ -293,7 +292,7 @@ export default function Home() {
       <div className="relative max-w-7xl mx-auto px-3 py-5 sm:px-4 space-y-5">
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2 min-w-0">
-            <h1 className="text-6xl sm:text-7xl font-black uppercase tracking-tighter leading-[0.9] p5-skew">
+            <h1 className="text-5xl sm:text-7xl font-black uppercase tracking-tighter leading-[0.9] p5-skew">
               <span className="bg-foreground text-background px-2 py-0.5 inline-block p5-shadow">Tool</span>
               <span className="text-primary"> Suite</span>
             </h1>
@@ -342,14 +341,14 @@ export default function Home() {
                 </button>
               )}
             </div>
-            <TabsList className="grid grid-cols-5 bg-card border border-border w-full h-auto p-1 gap-1">
+            <TabsList className="flex overflow-x-auto justify-start sm:grid sm:grid-cols-5 bg-card border border-border w-full h-auto p-1 gap-1">
               {Object.entries(CATEGORIES).map(([cat, def]) => {
                 const CatIcon = def.icon;
                 return (
                   <TabsTrigger
                     key={cat}
                     value={cat}
-                    className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2 min-h-0 h-9"
+                    className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2 min-h-0 h-9 flex-none sm:flex-1"
                   >
                     <CatIcon className="w-4 h-4" />
                     {def.label} ({def.tools.length})
@@ -406,7 +405,6 @@ export default function Home() {
             {renderSubRow("data")}
             <div>
               {shownTool("data") === "xml" && <XmlToCsvTool />}
-              {shownTool("data") === "color-data" && <ColorExtractorTool />}
             </div>
           </TabsContent>
         </Tabs>
