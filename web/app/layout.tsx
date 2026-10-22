@@ -13,6 +13,11 @@ export const metadata = {
   description: "Professional PDF, image & data utilities. 100% on-device, square, red.",
 }
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
