@@ -182,7 +182,10 @@ async function walkSpTree(st: WalkState, tree: XmlNode): Promise<void> {
     } else if (local === "pic") {
       const picPr = child(node, "spPr");
       const rect = xfrmRect(picPr ? child(picPr, "xfrm") : null);
-      if (!rect) continue;
+      if (!rect) {
+        st.unsupported.push("image without geometry");
+        continue;
+      }
       const blip = child(child(node, "blipFill") ?? { tag: "", attrs: {}, children: [], text: "" }, "blip");
       const embed = blip ? Object.entries(blip.attrs).find(([k]) => k === "r:embed" || k.endsWith(":embed"))?.[1] : undefined;
       const target = embed ? st.embedById[embed] : undefined;
@@ -297,9 +300,14 @@ export async function extractDeckContent(data: ArrayBuffer | Uint8Array): Promis
     }
     const slideDoc = parseXml(await get(slidePath));
     const tree = findAll(slideDoc.root, "p:cSld")[0];
-    const spTree = tree ? child(tree, "spTree") : null;
     const st: WalkState = { zip, slideDir, embedById, shapes: [], unsupported: [], dx: 0, dy: 0, sx: 1, sy: 1 };
-    if (spTree) await walkSpTree(st, spTree);
+    if (!tree) {
+      st.unsupported.push("slide missing cSld");
+    } else {
+      const spTree = child(tree, "spTree");
+      if (!spTree) st.unsupported.push("slide missing shape tree");
+      else await walkSpTree(st, spTree);
+    }
     out.slides.push({ shapes: st.shapes, unsupported: st.unsupported });
     if (st.unsupported.length) out.unsupported.push({ slide: slideIndex + 1, kinds: st.unsupported });
   }

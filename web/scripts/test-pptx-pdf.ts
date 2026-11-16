@@ -27,7 +27,12 @@ const connectorShape = `<p:cxnSp>
   <p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="9144000" cy="4572000"/></a:xfrm></p:spPr>
 </p:cxnSp>`;
 
-async function fixture(body: string): Promise<Uint8Array> {
+const imageWithoutGeometry = `<p:pic>
+  <p:nvPicPr><p:cNvPr id="4" name="Image"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill><a:blip r:embed="rIdImage"/></p:blipFill><p:spPr/>
+</p:pic>`;
+
+async function fixtureSlide(slide: string): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
     "ppt/presentation.xml",
@@ -37,8 +42,12 @@ async function fixture(body: string): Promise<Uint8Array> {
     "ppt/_rels/presentation.xml.rels",
     `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/></Relationships>`
   );
-  zip.file("ppt/slides/slide1.xml", slideXml(body));
+  zip.file("ppt/slides/slide1.xml", slide);
   return zip.generateAsync({ type: "uint8array" });
+}
+
+async function fixture(body: string): Promise<Uint8Array> {
+  return fixtureSlide(slideXml(body));
 }
 
 const fontRoot = join(process.cwd(), "public");
@@ -72,6 +81,24 @@ assert.deepEqual(connectorDeck.unsupported, [{ slide: 1, kinds: ["cxnSp shape"] 
 await assert.rejects(
   () => deckContentToPdf(connectorDeck, { deckName: "connector-fixture" }),
   /unsupported visual content.*slide 1: cxnSp shape/
+);
+
+const missingTreeDeck = await extractDeckContent(
+  await fixtureSlide(
+    `<?xml version="1.0" encoding="UTF-8"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld/></p:sld>`
+  )
+);
+assert.deepEqual(missingTreeDeck.unsupported, [{ slide: 1, kinds: ["slide missing shape tree"] }]);
+await assert.rejects(
+  () => deckContentToPdf(missingTreeDeck, { deckName: "missing-tree-fixture" }),
+  /unsupported visual content.*slide 1: slide missing shape tree/
+);
+
+const malformedImageDeck = await extractDeckContent(await fixture(imageWithoutGeometry));
+assert.deepEqual(malformedImageDeck.unsupported, [{ slide: 1, kinds: ["image without geometry"] }]);
+await assert.rejects(
+  () => deckContentToPdf(malformedImageDeck, { deckName: "malformed-image-fixture" }),
+  /unsupported visual content.*slide 1: image without geometry/
 );
 
 console.log("pptx-pdf regression fixtures passed");
