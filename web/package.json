@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:pptx-pdf": "node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/test-pptx-pdf.ts",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit"
   },
@@ -18,6 +19,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.16",
+    "heic-to": "^1.6.5",
     "jszip": "^3.10.1",
     "katex": "^0.18.9",
     "lucide-react": "^1.22.0",

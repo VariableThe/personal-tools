@@ -18,6 +18,8 @@ import {
   FolderKanban,
   Image as ImageIcon,
   Presentation,
+  Clapperboard,
+  ListChecks,
   Zap,
   Mic,
   Search,
@@ -48,6 +50,8 @@ import { ImageUpscalerTool } from "@/components/tools/image/image-upscaler";
 
 import { XmlToCsvTool } from "@/components/tools/xml-to-csv";
 import { AudioTranscriberTool } from "@/components/tools/audio/audio-transcriber";
+import { VideoMontageTool } from "@/components/tools/video/montage-builder";
+import { KeepDiscardTool } from "@/components/tools/video/keep-or-discard";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -93,12 +97,19 @@ const CATEGORIES: Record<string, { label: string; icon: LucideIcon; tools: ToolD
     icon: Mic,
     tools: [{ id: "transcribe", label: "Audio Transcriber", icon: Mic }],
   },
+  video: {
+    label: "Video",
+    icon: Clapperboard,
+    tools: [
+      { id: "montage", label: "Montage Builder", icon: Clapperboard },
+      { id: "sort", label: "Keep or Discard", icon: ListChecks },
+    ],
+  },
   data: {
     label: "Data",
     icon: FileText,
     tools: [
       { id: "xml", label: "XML / Plist to CSV", icon: FileText },
-      { id: "color-data", label: "Color Extractor", icon: Pipette },
     ],
   },
 };
@@ -141,6 +152,7 @@ export default function Home() {
     pdf: selection.category === "pdf" ? selection.tool : "merge",
     image: "compress",
     audio: "transcribe",
+    video: "montage",
     data: "xml",
   });
   const [query, setQuery] = useState("");
@@ -235,7 +247,7 @@ export default function Home() {
       <div className="space-y-3 border-b border-border pb-4">
         {groups.map((g) => (
           <div key={g.cat} className="flex items-center gap-3 flex-wrap justify-center">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-14 text-right">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-full text-center sm:w-14 sm:text-right">
               {g.label}
             </span>
             <div className="flex flex-wrap gap-2 justify-center">
@@ -280,14 +292,14 @@ export default function Home() {
       <div className="relative max-w-7xl mx-auto px-3 py-5 sm:px-4 space-y-5">
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2 min-w-0">
-            <h1 className="text-6xl sm:text-7xl font-black uppercase tracking-tighter leading-[0.9] p5-skew">
+            <h1 className="text-5xl sm:text-7xl font-black uppercase tracking-tighter leading-[0.9] p5-skew">
               <span className="bg-foreground text-background px-2 py-0.5 inline-block p5-shadow">Tool</span>
               <span className="text-primary"> Suite</span>
             </h1>
             <p className="text-[11px] lg:text-xs text-muted-foreground font-mono md:whitespace-nowrap">
               <span className="md:hidden">{totalTools} utilities · 100% on-device</span>
               <span className="hidden md:inline">
-                {totalTools} utilities · PDF · image · audio · data — 100% on-device, zero uploads. No
+                {totalTools} utilities · PDF · image · video · audio · data — 100% on-device, zero uploads. No
                 files ever leave your browser.
               </span>
             </p>
@@ -329,14 +341,14 @@ export default function Home() {
                 </button>
               )}
             </div>
-            <TabsList className="grid grid-cols-4 bg-card border border-border w-full h-auto p-1 gap-1">
+            <TabsList className="flex overflow-x-auto justify-start sm:grid sm:grid-cols-5 bg-card border border-border w-full h-auto p-1 gap-1">
               {Object.entries(CATEGORIES).map(([cat, def]) => {
                 const CatIcon = def.icon;
                 return (
                   <TabsTrigger
                     key={cat}
                     value={cat}
-                    className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2 min-h-0 h-9"
+                    className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary border border-transparent font-mono uppercase tracking-wide text-xs flex items-center justify-center gap-2 min-h-0 h-9 flex-none sm:flex-1"
                   >
                     <CatIcon className="w-4 h-4" />
                     {def.label} ({def.tools.length})
@@ -382,11 +394,17 @@ export default function Home() {
             </div>
           </TabsContent>
 
+          <TabsContent value="video" className="space-y-6">
+            {renderSubRow("video")}
+            <div className="max-w-4xl mx-auto">
+              {shownTool("video") === "sort" ? <KeepDiscardTool /> : <VideoMontageTool />}
+            </div>
+          </TabsContent>
+
           <TabsContent value="data" className="space-y-6">
             {renderSubRow("data")}
             <div>
               {shownTool("data") === "xml" && <XmlToCsvTool />}
-              {shownTool("data") === "color-data" && <ColorExtractorTool />}
             </div>
           </TabsContent>
         </Tabs>

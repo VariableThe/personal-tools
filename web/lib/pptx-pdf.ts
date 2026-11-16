@@ -2,10 +2,10 @@
  * Slide-content export: .pptx -> PDF, fully on-device.
  *
  * A browser cannot faithfully rasterize PowerPoint rendering, so this
- * extracts each slide's real content (text runs with size/bold/alignment,
- * pictures, tables) and lays it out on same-aspect PDF pages with pdf-lib.
- * The output is a clean handout-style PDF — all content preserved, exact
- * PowerPoint typography not promised.
+ * extracts a deliberately small, audited subset of slide content (text runs,
+ * raster pictures, and tables) and lays it out on same-aspect PDF pages with
+ * pdf-lib. This is not a PowerPoint renderer: if a slide contains content
+ * outside that subset, export fails instead of silently dropping it.
  */
 
 import JSZip from "jszip";
@@ -44,13 +44,14 @@ export type SlideShape =
 
 export interface SlideContent {
   shapes: SlideShape[];
+  unsupported: string[];
 }
 
 export interface DeckContent {
   slides: SlideContent[];
   widthPt: number;
   heightPt: number;
-  skippedImages: number;
+  unsupported: Array<{ slide: number; kinds: string[] }>;
 }
 
 function emuToPt(v: number): number {
@@ -137,7 +138,7 @@ interface WalkState {
   slideDir: string;
   embedById: Record<string, string>;
   shapes: SlideShape[];
-  skippedImages: number;
+  unsupported: string[];
   dx: number;
   dy: number;
   sx: number;
@@ -162,9 +163,15 @@ async function walkSpTree(st: WalkState, tree: XmlNode): Promise<void> {
     if (local === "sp") {
       const spPr = child(node, "spPr");
       const rect = xfrmRect(spPr ? child(spPr, "xfrm") : null);
-      if (!rect) continue;
+      if (!rect) {
+        st.unsupported.push("shape without geometry");
+        continue;
+      }
       const txBody = child(node, "txBody");
-      if (!txBody) continue;
+      if (!txBody) {
+        st.unsupported.push("drawn shape");
+        continue;
+      }
       const nvPr = child(child(node, "nvSpPr") ?? { tag: "", attrs: {}, children: [], text: "" }, "nvPr");
       const phType = nvPr ? child(nvPr, "ph")?.attrs["type"] : undefined;
       const isTitle = phType === "title" || phType === "ctrTitle";
@@ -181,23 +188,26 @@ async function walkSpTree(st: WalkState, tree: XmlNode): Promise<void> {
       const target = embed ? st.embedById[embed] : undefined;
       const abs = target ? resolvePart(st.slideDir, target) : null;
       if (!abs) {
-        st.skippedImages++;
+        st.unsupported.push("image with missing relationship");
         continue;
       }
       const f = st.zip.file(abs);
       if (!f) {
-        st.skippedImages++;
+        st.unsupported.push("image with missing data");
         continue;
       }
       const ext = (abs.split(".").pop() ?? "").toLowerCase();
       if (ext !== "png" && ext !== "jpg" && ext !== "jpeg") {
-        st.skippedImages++;
+        st.unsupported.push(`image format ${ext || "unknown"}`);
         continue;
       }
       st.shapes.push({ kind: "image", ...placeRect(st, rect), data: await f.async("uint8array"), ext });
     } else if (local === "graphicFrame") {
       const rect = xfrmRect(child(node, "xfrm"));
-      if (!rect) continue;
+      if (!rect) {
+        st.unsupported.push("graphic without geometry");
+        continue;
+      }
       const tbl = findAll(node, "a:tbl")[0];
       if (tbl) {
         const grid = child(tbl, "tblGrid");
@@ -217,21 +227,13 @@ async function walkSpTree(st: WalkState, tree: XmlNode): Promise<void> {
         }
         if (rows.length && colWidths.length) {
           st.shapes.push({ kind: "table", ...placeRect(st, rect), colWidths, rows });
+        } else {
+          st.unsupported.push("table with incomplete structure");
         }
       } else {
-        // Charts, SmartArt, etc: salvage visible text at the frame's position.
-        const texts = findAll(node, "a:t")
-          .map((t) => t.text)
-          .filter((t) => t.trim());
-        if (texts.length) {
-          st.shapes.push({
-            kind: "text",
-            ...placeRect(st, rect),
-            paragraphs: [
-              { align: "left", runs: texts.map((text) => ({ text, sizePt: 12, bold: false, italic: false, color: { r: 0, g: 0, b: 0 } })) },
-            ],
-          });
-        }
+        // Charts, SmartArt, and other graphic frames cannot be reconstructed
+        // from their text alone without losing the visual data.
+        st.unsupported.push(findAll(node, "c:chart").length ? "chart" : "graphic frame");
       }
     } else if (local === "grpSp") {
       const grpPr = child(node, "grpSpPr");
@@ -251,7 +253,9 @@ async function walkSpTree(st: WalkState, tree: XmlNode): Promise<void> {
           sy: chH ? st.sy * (num(ext.attrs["cy"], 0) / chH) : st.sy,
         };
         await walkSpTree(child2, node);
-        st.skippedImages = child2.skippedImages;
+        st.unsupported = child2.unsupported;
+      } else {
+        st.unsupported.push("group without geometry");
       }
     }
   }
@@ -273,9 +277,10 @@ export async function extractDeckContent(data: ArrayBuffer | Uint8Array): Promis
 
   const { slidePartPaths } = await import("./pptx-merge");
   const slides = slidePartPaths(presXml, presRelsXml);
-  const out: DeckContent = { slides: [], widthPt, heightPt, skippedImages: 0 };
+  const out: DeckContent = { slides: [], widthPt, heightPt, unsupported: [] };
 
-  for (const slidePath of slides) {
+  for (let slideIndex = 0; slideIndex < slides.length; slideIndex++) {
+    const slidePath = slides[slideIndex];
     const slideDir = slidePath.split("/").slice(0, -1).join("/");
     const embedById: Record<string, string> = {};
     const relsFile = zip.file(relsPathFor(slidePath));
@@ -289,10 +294,10 @@ export async function extractDeckContent(data: ArrayBuffer | Uint8Array): Promis
     const slideDoc = parseXml(await get(slidePath));
     const tree = findAll(slideDoc.root, "p:cSld")[0];
     const spTree = tree ? child(tree, "spTree") : null;
-    const st: WalkState = { zip, slideDir, embedById, shapes: [], skippedImages: 0, dx: 0, dy: 0, sx: 1, sy: 1 };
+    const st: WalkState = { zip, slideDir, embedById, shapes: [], unsupported: [], dx: 0, dy: 0, sx: 1, sy: 1 };
     if (spTree) await walkSpTree(st, spTree);
-    out.skippedImages += st.skippedImages;
-    out.slides.push({ shapes: st.shapes });
+    out.slides.push({ shapes: st.shapes, unsupported: st.unsupported });
+    if (st.unsupported.length) out.unsupported.push({ slide: slideIndex + 1, kinds: st.unsupported });
   }
   return out;
 }
@@ -349,7 +354,29 @@ interface LineBit {
  *  Everything else passes through untouched — the embedded subset font
  *  handles Unicode directly instead of lossy ASCII mapping. */
 function stripControls(s: string): string {
-  return s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  return s.replace(/\t/g, " ").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+}
+
+function missingGlyphs(deck: DeckContent, fontBytes: { regular: Uint8Array; bold: Uint8Array }): string[] {
+  const fonts = {
+    regular: fontkit.create(fontBytes.regular),
+    bold: fontkit.create(fontBytes.bold),
+  };
+  const missing = new Set<string>();
+  for (const slide of deck.slides) {
+    for (const shape of slide.shapes) {
+      const paragraphs = shape.kind === "text" ? shape.paragraphs : shape.kind === "table" ? shape.rows.flat(2) : [];
+      for (const para of paragraphs) {
+        for (const run of para.runs) {
+          const font = run.bold ? fonts.bold : fonts.regular;
+          for (const character of stripControls(run.text)) {
+            if (font.glyphForCodePoint(character.codePointAt(0) ?? 0).id === 0) missing.add(character);
+          }
+        }
+      }
+    }
+  }
+  return [...missing];
 }
 
 /** Wrap a paragraph into lines of (text, font, size) bits within maxWidth. */
@@ -419,6 +446,23 @@ export async function deckContentToPdf(
   deck: DeckContent,
   opts: PdfExportOptions
 ): Promise<Uint8Array> {
+  if (deck.unsupported.length) {
+    const details = deck.unsupported
+      .map(({ slide, kinds }) => `slide ${slide}: ${[...new Set(kinds)].join(", ")}`)
+      .join("; ");
+    throw new Error(
+      `PDF export is unavailable because the deck contains unsupported visual content (${details}). ` +
+        "No incomplete PDF was created. Export the original PPTX to preserve fidelity."
+    );
+  }
+  const fontBytes = await loadFontBytes();
+  const missing = missingGlyphs(deck, fontBytes);
+  if (missing.length) {
+    throw new Error(
+      `PDF export is unavailable because the embedded font cannot render these characters: ${missing.join(", ")}. ` +
+        "No incomplete PDF was created. Export the original PPTX or use a deck with supported glyphs."
+    );
+  }
   const pdf = await PDFDocument.create();
   pdf.setTitle(opts.deckName);
   const margin = 36;
@@ -443,7 +487,9 @@ export async function deckContentToPdf(
             if (para.align === "center") x0 = x + Math.max(0, (w - totalW) / 2);
             if (para.align === "right") x0 = x + Math.max(0, w - totalW);
             y -= lineHeight;
-            if (y < margin) return;
+            if (y < margin) {
+              throw new Error(`PDF export is unavailable because slide ${idx + 1} text does not fit within its page`);
+            }
             for (const b of line) {
               if (!b.text.trim()) {
                 x0 += b.width;
@@ -493,17 +539,12 @@ export async function deckContentToPdf(
         if (shape.kind === "text") {
           await drawText(shape.x, top, shape.w, shape.paragraphs);
         } else if (shape.kind === "image") {
-          try {
-            const img =
-              shape.ext === "png" ? await pdf.embedPng(shape.data) : await pdf.embedJpg(shape.data);
-            const scale = Math.min(shape.w / img.width, shape.h / img.height, 1);
-            // Cap upscale at 1x to avoid blurry blowups; anchor top-left.
-            const dw = img.width * scale;
-            const dh = img.height * scale;
-            page.drawImage(img, { x: shape.x, y: top - shape.h, width: dw, height: dh });
-          } catch {
-            // Corrupt image bytes — content export continues without it.
-          }
+          const img = shape.ext === "png" ? await pdf.embedPng(shape.data) : await pdf.embedJpg(shape.data);
+          const scale = Math.min(shape.w / img.width, shape.h / img.height, 1);
+          // Cap upscale at 1x to avoid blurry blowups; anchor top-left.
+          const dw = img.width * scale;
+          const dh = img.height * scale;
+          page.drawImage(img, { x: shape.x, y: top - shape.h, width: dw, height: dh });
         } else if (shape.kind === "table") {
           const totalW = shape.colWidths.reduce((s, w) => s + w, 0) || 1;
           const availW = Math.min(shape.w, deck.widthPt - shape.x - margin);
@@ -527,7 +568,9 @@ export async function deckContentToPdf(
               const nLines = wrapped.reduce((s, r) => s + r.lines.length, 0) || 1;
               rowH = Math.max(rowH, nLines * maxLh + cellPad * 2);
             }
-            if (y - rowH < margin) break;
+            if (y - rowH < margin) {
+              throw new Error(`PDF export is unavailable because slide ${idx + 1} table content does not fit within its page`);
+            }
             let x = shape.x;
             for (let c = 0; c < row.length; c++) {
               const cw = cols[c] ?? availW / row.length;

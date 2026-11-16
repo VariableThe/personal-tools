@@ -128,7 +128,7 @@ export function PageNumbersPdfTool() {
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-3">
                 Numbering Placement Position
               </span>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {(
                   [
                     { id: "bottom-center", label: "Bottom Center" },

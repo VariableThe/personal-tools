@@ -24,3 +24,5 @@ web/.env*.local
 *.txt
 *.zip
 !test_*.xml
+# Next.js app icons (favicon set) — must be committed
+!web/app/apple-icon.png

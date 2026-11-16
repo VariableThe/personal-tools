@@ -13,10 +13,41 @@ export interface NormalizeResult {
   warnings: string[];
   /** Blocking problems (unbalanced delimiters, bad LaTeX). */
   errors: string[];
+  /** Same blocking problems packaged with the offending snippet + a
+   *  one-line repair prompt for the per-error fix-it boxes. */
+  fixable: NlmFixableProblem[];
   /** Counts used for the stats row. */
   mathCounts: { inline: number; display: number };
   /** True when a ```mermaid block was found (previewed as code only). */
   hasMermaid: boolean;
+}
+
+/** One blocking problem packaged with everything a fix-it box needs:
+ *  the exact offending text from the user's input, a one-line repair
+ *  prompt to paste into an AI, and the exact target to replace. */
+export interface NlmFixableProblem {
+  id: string;
+  message: string;
+  /** Exact substring of the raw input (a few lines around the offense). */
+  snippet: string;
+  /** Single-sentence instruction; the copy payload is fixPrompt + snippet. */
+  fixPrompt: string;
+  /** Exact string in the raw input to swap for the pasted fix. */
+  target: string;
+  /** 1-based raw line number of the first snippet line (when located). */
+  snippetStartLine?: number;
+  /** 1-based raw lines inside the snippet that hold trigger points. */
+  triggerLines?: number[];
+  /** Human-readable trigger position(s), e.g. "line 42, column 17". */
+  location?: string;
+}
+
+/** One-line repair instruction shared by the normalize + render stages.
+ *  The fenced-plaintext requirement works around AI chat frontends that
+ *  re-render $ math and mangle backslashes in raw output. */
+export function buildNlmFixPrompt(message: string): string {
+  const clean = message.replace(/\s*\.\s*$/, "");
+  return `Fix only the LaTeX math delimiters/syntax in the snippet below and return just the corrected snippet with no explanation. Error: ${clean}. Return the corrected snippet as plaintext inside a single \`\`\`text fenced code block with nothing outside the fence.`;
 }
 
 /** Code spans/blocks are extracted before any math processing so we never touch them. */
@@ -208,13 +239,229 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
 
+/** Split raw input into lines (CRLF-safe). */
+function splitRawLines(raw: string): string[] {
+  return raw.replace(/\r\n?/g, "\n").split("\n");
+}
+
+/** A few lines around idx (2 before / 2 after) — always an exact
+ *  substring of the raw input so Replace can swap it verbatim. */
+function windowForLines(lines: string[], idx: number, before = 2, after = 2): string {
+  const start = Math.max(0, idx - before);
+  const end = Math.min(lines.length, idx + after + 1);
+  return lines.slice(start, end).join("\n");
+}
+
+/** A triggering point of an unmatched-delimiter error (1-based line, 0-based column). */
+export interface NlmDollarTrigger {
+  line: number;
+  col: number;
+}
+
+const maskSpaces = (s: string): string => " ".repeat(s.length);
+
+/** Locate the ACTUAL leftover $ / $$ delimiters the pipeline counts, by
+ *  replaying its matching semantics line-by-line without moving columns:
+ *  fenced code and inline code are masked out, same-line $$ pairs and
+ *  \(...\) / \[...\] spans are masked (the pipeline converts then extracts
+ *  them, so inner $s can't be leftovers), and multiline $$ regions are
+ *  tracked across lines. Masking uses spaces so trigger columns stay true.
+ *  (Approximations, documented: a \[ opener closed on a later line is treated
+ *  like $$; pathological nesting such as \[a$$b\] may diverge — the global
+ *  error count remains the source of truth.) */
+function locateDollarTriggers(raw: string, kind: "single" | "display"): NlmDollarTrigger[] {
+  const lines = splitRawLines(raw);
+  const triggers: NlmDollarTrigger[] = [];
+  // Fresh regexes per call (shared /g state is not re-entrant). The inline
+  // and leftover patterns are exact copies of the pipeline's own — including
+  // the inner's escaped-\$ tolerance.
+  const inlineRe = /(?<!\$)(?<!\\)\$(?!\$|\s)((?:\\\$|[^$\n])*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g;
+  const leftoverRe = /(?<!\$)(?<!\\)\$(?!\$)/g;
+  const displayPairRe = /\$\$([\s\S]*?)\$\$/g;
+  const escParenRe = /\\\\\(([\s\S]*?)\\\\\)/g;
+  const escBracketRe = /\\\\\[([\s\S]*?)\\\\\]/g;
+  const parenRe = /\\\(([\s\S]*?)\\\)/g;
+  const bracketRe = /\\\[([\s\S]*?)\\\]/g;
+  const danglingDisplayRe = /(?<!\\)\$\$/;
+  let inFence = false;
+  let inDisplay = false;
+  let inBracket = false;
+
+  lines.forEach((rawLine, idx) => {
+    const lineNo = idx + 1;
+    // Fenced code: a line holding 2+ markers is self-contained; 1 toggles.
+    const fenceMarks = rawLine.match(/```|~~~/g) || [];
+    if (fenceMarks.length >= 2) return;
+    if (fenceMarks.length === 1) {
+      inFence = !inFence;
+      return;
+    }
+    if (inFence) return;
+
+    let s = rawLine.replace(/`[^`\n]+`/g, maskSpaces);
+
+    if (inDisplay || inBracket) {
+      const closerRe = inDisplay ? /\$\$/ : /\\\\\]|\\\]/;
+      const cm = closerRe.exec(s);
+      if (!cm) return; // whole line is display math — no triggers here
+      const end = cm.index + cm[0].length;
+      s = maskSpaces(s.slice(0, end)) + s.slice(end);
+      inDisplay = false;
+      inBracket = false;
+    }
+
+    // Bracket-math spans (same line) — see doc comment above.
+    s = s.replace(escParenRe, maskSpaces).replace(parenRe, maskSpaces);
+    s = s.replace(escBracketRe, maskSpaces);
+    s = s.replace(bracketRe, maskSpaces);
+    if (/\\\\\[|\\\[/.test(s)) {
+      const open = s.search(/\\\\\[|\\\[/);
+      s = s.slice(0, open) + maskSpaces(s.slice(open));
+      inBracket = true;
+    }
+
+    // Same-line display pairs can't hold triggers. Pairing uses plain $$
+    // (extraction semantics); trigger recording below is escape-aware
+    // (count semantics), matching the pipeline's leftover count.
+    s = s.replace(displayPairRe, maskSpaces);
+    const dangling = s.search(danglingDisplayRe);
+    if (dangling !== -1) {
+      if (kind === "display") triggers.push({ line: lineNo, col: dangling });
+      s = s.slice(0, dangling) + maskSpaces(s.slice(dangling));
+      inDisplay = true;
+    }
+
+    if (kind === "single") {
+      s = s.replace(inlineRe, maskSpaces);
+      for (const m of s.matchAll(leftoverRe)) {
+        triggers.push({ line: lineNo, col: m.index ?? 0 });
+      }
+    }
+  });
+
+  return triggers;
+}
+
+/** Exact raw-lines window around the first trigger, plus its location info.
+ *  Falls back to the first $-bearing line (never an unrelated region). */
+function snippetForUnmatchedDollar(
+  raw: string,
+  kind: "single" | "display"
+): { snippet: string; startLine?: number; triggerLines?: number[]; location?: string } {
+  const lines = splitRawLines(raw);
+  const triggers = locateDollarTriggers(raw, kind);
+  if (triggers.length === 0) {
+    let fb = lines.findIndex((l) => l.includes("$"));
+    if (fb === -1) fb = 0;
+    return { snippet: windowForLines(lines, fb) };
+  }
+  const first = triggers[0];
+  const start0 = Math.max(0, first.line - 1 - 2);
+  const snippet = windowForLines(lines, first.line - 1);
+  const startLine = start0 + 1;
+  const endLine = startLine + snippet.split("\n").length - 1;
+  const triggerLines = triggers.filter((t) => t.line >= startLine && t.line <= endLine).map((t) => t.line);
+  const shown = triggers
+    .slice(0, 3)
+    .map((t) => `line ${t.line}, column ${t.col + 1}`)
+    .join(" · ");
+  const location = triggers.length > 3 ? `${shown} (+${triggers.length - 3} more)` : shown;
+  return { snippet, startLine, triggerLines, location };
+}
+
+const TEX_STOP = new Set([
+  "frac",
+  "sqrt",
+  "sum",
+  "prod",
+  "int",
+  "lim",
+  "sums",
+  "sin",
+  "cos",
+  "tan",
+  "log",
+  "ln",
+  "exp",
+  "text",
+  "left",
+  "right",
+  "times",
+  "cdot",
+  "div",
+  "leq",
+  "geq",
+  "neq",
+  "approx",
+  "infty",
+  "partial",
+  "begin",
+  "end",
+]);
+
+/** Distinctive natural-language keywords from a TeX segment (skips LaTeX
+ *  command names and Greek letters) for locating the raw source lines. */
+function keywordsFromTex(tex: string): string[] {
+  const words = tex.match(/[A-Za-z]{4,}/g) || [];
+  const out: string[] = [];
+  for (const w of words) {
+    if (TEX_STOP.has(w) || TEX_STOP.has(w.toLowerCase())) continue;
+    if (GREEK_NAMES.includes(w)) continue;
+    if (out.some((o) => o.toLowerCase() === w.toLowerCase())) continue;
+    out.push(w);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/** Raw-lines window most likely containing the given TeX segment. Exported
+ *  so the render stage can locate the same region in the user's input. */
+export function snippetForTex(raw: string, tex: string): string {
+  const lines = splitRawLines(raw);
+  for (const k of keywordsFromTex(tex)) {
+    const idx = lines.findIndex((l) => l.includes(k));
+    if (idx !== -1) return windowForLines(lines, idx);
+  }
+  const frag = tex
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[\\${}\s]+/, "")
+    .slice(0, 24);
+  if (frag.length >= 6) {
+    const idx = lines.findIndex((l) => l.includes(frag.slice(0, 12)));
+    if (idx !== -1) return windowForLines(lines, idx);
+  }
+  const fb = locateDollarTriggers(raw, "single");
+  return windowForLines(lines, fb.length > 0 ? fb[0].line - 1 : 0);
+}
+
+function toFixable(
+  id: string,
+  message: string,
+  snippet: string,
+  extra?: { startLine?: number; triggerLines?: number[]; location?: string }
+): NlmFixableProblem {
+  if (!snippet) snippet = "(could not locate the offending lines — copy the fix prompt and inspect $ delimiters near your latest edit)";
+  return {
+    id,
+    message,
+    snippet,
+    fixPrompt: buildNlmFixPrompt(message),
+    target: snippet,
+    ...(extra?.startLine !== undefined ? { snippetStartLine: extra.startLine } : {}),
+    ...(extra?.triggerLines !== undefined ? { triggerLines: extra.triggerLines } : {}),
+    ...(extra?.location !== undefined ? { location: extra.location } : {}),
+  };
+}
+
 export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
   const warnings: string[] = [];
   const errors: string[] = [];
+  const fixable: NlmFixableProblem[] = [];
   const repairs = new Set<string>();
 
   if (!raw || !raw.trim()) {
-    return { markdown: "", warnings: [], errors: [], mathCounts: { inline: 0, display: 0 }, hasMermaid: false };
+    return { markdown: "", warnings: [], errors: [], fixable: [], mathCounts: { inline: 0, display: 0 }, hasMermaid: false };
   }
 
   // 1. Baseline cleanup (whitespace only — never touches wording).
@@ -263,10 +510,13 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
   });
 
   // 5. Extract inline math ($...$), repair inside.
-  // An escaped "\$" is a literal dollar, never a delimiter.
+  // An escaped "\$" is a literal dollar, never a delimiter — and it may sit
+  // INSIDE a pair (e.g. $\le \$5\text{...}$), so the inner pattern crosses it.
+  // The closer still rejects \$ (lookbehind) and $5 (digit guard), so lone
+  // currency dollars keep erroring exactly as before.
   const inlineSegs: string[] = [];
   // Avoid matching $$ remnants or $ prices: require non-space adjacency on open.
-  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)([^$\n]*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (m, inner) => {
+  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)((?:\\\$|[^$\n])*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (m, inner) => {
     const repaired = repairMathSegment(inner, warnings, repairs);
     inlineSegs.push(repaired);
     return `${MATH_PH}I${inlineSegs.length - 1}@`;
@@ -278,19 +528,33 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
   const restoredDisplayPlaceholders = displaySegs.length;
   const restoredInlinePlaceholders = inlineSegs.length;
   if (leftoverDisplay > 0) {
-    errors.push(
-      `Found ${leftoverDisplay} unmatched "$$" delimiter${leftoverDisplay === 1 ? "" : "s"}. Each display equation needs an opening and closing $$ on its own lines.`
-    );
+    const msg =
+      `Found ${leftoverDisplay} unmatched "$$" delimiter${leftoverDisplay === 1 ? "" : "s"}. Each display equation needs an opening and closing $$ on its own lines.`;
+    errors.push(msg);
+    const loc = snippetForUnmatchedDollar(raw, "display");
+    fixable.push(toFixable("norm-unmatched-display", msg, loc.snippet, loc));
   }
   if (leftoverSingle > 0) {
-    errors.push(
-      `Found ${leftoverSingle} unmatched "$" delimiter${leftoverSingle === 1 ? "" : "s"}. Inline math needs matching $...$ pairs (a lone $ for currency can trigger this — wrap it in backticks like \`$\`).`
-    );
+    const msg =
+      `Found ${leftoverSingle} unmatched "$" delimiter${leftoverSingle === 1 ? "" : "s"}. Inline math needs matching $...$ pairs (a lone $ for currency can trigger this — wrap it in backticks like \`$\`).`;
+    errors.push(msg);
+    const loc = snippetForUnmatchedDollar(raw, "single");
+    fixable.push(toFixable("norm-unmatched-inline", msg, loc.snippet, loc));
   }
 
   // 7. Validate each math segment.
-  displaySegs.forEach((tex, i) => errors.push(...validateMathSegment(tex, i, true)));
-  inlineSegs.forEach((tex, i) => errors.push(...validateMathSegment(tex, i, false)));
+  displaySegs.forEach((tex, i) => {
+    for (const [k, msg] of validateMathSegment(tex, i, true).entries()) {
+      errors.push(msg);
+      fixable.push(toFixable(`norm-display-${i}-${k}`, msg, snippetForTex(raw, tex)));
+    }
+  });
+  inlineSegs.forEach((tex, i) => {
+    for (const [k, msg] of validateMathSegment(tex, i, false).entries()) {
+      errors.push(msg);
+      fixable.push(toFixable(`norm-inline-${i}-${k}`, msg, snippetForTex(raw, tex)));
+    }
+  });
 
   // 8. Restore math placeholders in canonical form.
   work = work.replace(new RegExp(`${MATH_PH}D(\\d+)@`, "g"), (_, i) => {
@@ -330,6 +594,7 @@ export function normalizeNotebookLmMarkdown(raw: string): NormalizeResult {
     markdown,
     warnings,
     errors,
+    fixable,
     mathCounts: { inline: restoredInlinePlaceholders, display: restoredDisplayPlaceholders },
     hasMermaid,
   };

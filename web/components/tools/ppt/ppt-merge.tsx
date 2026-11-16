@@ -39,7 +39,6 @@ interface ExportResult {
   pdfUrl: string | null;
   pdfSize: number | null;
   totalSlides: number;
-  skippedImages: number;
   emptySlides: number;
 }
 
@@ -181,7 +180,6 @@ export function PptMergeTool() {
         pdfUrl: result?.pdfUrl ?? null,
         pdfSize: result?.pdfSize ?? null,
         totalSlides: files.reduce((s, f) => s + (f.slideCount ?? 0), 0),
-        skippedImages: result?.skippedImages ?? 0,
         emptySlides: result?.emptySlides ?? 0,
       });
     } catch (err) {
@@ -199,13 +197,12 @@ export function PptMergeTool() {
       // One PDF per deck (preserves each deck's slide size), then join pages in order.
       // The export engine (fontkit + embedded fonts) loads on demand only.
       const { extractDeckContent, deckContentToPdf } = await import("@/lib/pptx-pdf");
-      const docs: { doc: PDFDocument; skipped: number; slides: number; empty: number }[] = [];
+      const docs: { doc: PDFDocument; slides: number; empty: number }[] = [];
       for (const item of files) {
         const deck = await extractDeckContent(await item.file.arrayBuffer());
         const bytes = await deckContentToPdf(deck, { deckName: item.name });
         docs.push({
           doc: await PDFDocument.load(bytes),
-          skipped: deck.skippedImages,
           slides: deck.slides.length,
           empty: deck.slides.filter((s) => s.shapes.length === 0).length,
         });
@@ -225,7 +222,6 @@ export function PptMergeTool() {
         pdfUrl: downloadBlob(blob),
         pdfSize: bytes.length,
         totalSlides: pages,
-        skippedImages: docs.reduce((s, d) => s + d.skipped, 0),
         emptySlides: docs.reduce((s, d) => s + d.empty, 0),
       });
     } catch (err) {
@@ -247,7 +243,7 @@ export function PptMergeTool() {
         </div>
         <CardDescription>
           Upload multiple <code>.pptx</code> decks, order them, then download one combined deck or
-          a slide-content PDF. Masters travel with their slides, so formatting is preserved.
+          a slide-content PDF. Masters travel with their slides, so PPTX formatting is preserved.
         </CardDescription>
       </CardHeader>
 
@@ -396,8 +392,9 @@ export function PptMergeTool() {
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground font-mono">
-              PPTX keeps full slide fidelity. PDF is a handout-style export (slide text, images and
-              tables, one page per slide) — exact PowerPoint rendering is not preserved.
+              PPTX keeps full slide fidelity. PDF is a handout-style export of supported slide text,
+              raster images and tables — exact PowerPoint rendering is not preserved, and decks with
+              unsupported visual elements are rejected rather than partially exported.
             </p>
           </div>
         )}
@@ -410,8 +407,6 @@ export function PptMergeTool() {
                 <h4 className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Ready for download</h4>
                 <p className="text-xs text-muted-foreground">
                   {result.totalSlides} {result.totalSlides === 1 ? "slide" : "slides"} in order
-                  {result.skippedImages > 0 &&
-                    ` · ${result.skippedImages} unsupported image(s) skipped in PDF`}
                   {result.emptySlides > 0 &&
                     ` · ${result.emptySlides} slide(s) had no extractable content`}
                 </p>

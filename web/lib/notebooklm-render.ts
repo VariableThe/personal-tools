@@ -7,18 +7,34 @@
 import { marked } from "marked";
 import katex from "katex";
 import DOMPurify from "dompurify";
+import { buildNlmFixPrompt, snippetForTex, type NlmFixableProblem } from "./notebooklm-latex";
 
 export interface RenderResult {
   html: string;
   mathErrors: string[];
+  /** Same failures packaged with snippet + repair prompt for fix-it boxes. */
+  fixable: NlmFixableProblem[];
 }
 
 const DISP_PH = "@@NLMDISP";
 const INL_PH = "@@NLMINL";
 
-export function renderNotebookLmHtml(normalizedMarkdown: string): RenderResult {
+export function renderNotebookLmHtml(normalizedMarkdown: string, rawSource?: string): RenderResult {
   const mathErrors: string[] = [];
-  if (!normalizedMarkdown.trim()) return { html: "", mathErrors };
+  const fixable: NlmFixableProblem[] = [];
+  const pushError = (id: string, message: string, tex?: string) => {
+    mathErrors.push(message);
+    let snippet: string;
+    if (rawSource && tex) {
+      snippet = snippetForTex(rawSource, tex);
+    } else if (tex) {
+      snippet = tex.length > 800 ? tex.slice(0, 800) : tex;
+    } else {
+      snippet = normalizedMarkdown.split("\n").slice(0, 10).join("\n").slice(0, 800);
+    }
+    fixable.push({ id, message, snippet, fixPrompt: buildNlmFixPrompt(message), target: snippet });
+  };
+  if (!normalizedMarkdown.trim()) return { html: "", mathErrors, fixable };
 
   // 1. Pull display math out (so the Markdown parser never touches it).
   const displaySegs: string[] = [];
@@ -27,9 +43,11 @@ export function renderNotebookLmHtml(normalizedMarkdown: string): RenderResult {
     return `\n\n${DISP_PH}${displaySegs.length - 1}@\n\n`;
   });
 
-  // 2. Pull inline math out ("\$" is a literal dollar, never a delimiter).
+  // 2. Pull inline math out ("\$" is a literal dollar, never a delimiter —
+  // and it may sit INSIDE a pair, so the inner pattern crosses it; same
+  // tolerant shape as the normalizer's extraction).
   const inlineSegs: string[] = [];
-  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)([^$\n]*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (_, inner) => {
+  work = work.replace(/(?<!\$)(?<!\\)\$(?!\$|\s)((?:\\\$|[^$\n])*?)(?<!\s)(?<!\\)\$(?!\$|\d)/g, (_, inner) => {
     inlineSegs.push(String(inner));
     return `${INL_PH}${inlineSegs.length - 1}@`;
   });
@@ -44,6 +62,15 @@ export function renderNotebookLmHtml(normalizedMarkdown: string): RenderResult {
         err instanceof Error ? err.message : String(err)
       )}</p>`,
       mathErrors: ["Markdown parse failed — the preview shows the error above."],
+      fixable: [
+        {
+          id: "render-md-parse",
+          message: "Markdown parse failed — the preview shows the error above.",
+          snippet: normalizedMarkdown.split("\n").slice(0, 10).join("\n").slice(0, 800),
+          fixPrompt: buildNlmFixPrompt("Markdown parse failed — the preview shows the error above."),
+          target: normalizedMarkdown.split("\n").slice(0, 10).join("\n").slice(0, 800),
+        },
+      ],
     };
   }
 
@@ -58,9 +85,8 @@ export function renderNotebookLmHtml(normalizedMarkdown: string): RenderResult {
         trust: false,
       })}</div>`;
     } catch (err) {
-      mathErrors.push(
-        `Display equation #${Number(i) + 1} failed to render (${err instanceof Error ? err.message : String(err)}). Check its LaTeX syntax.`
-      );
+      const msg = `Display equation #${Number(i) + 1} failed to render (${err instanceof Error ? err.message : String(err)}). Check its LaTeX syntax.`;
+      pushError(`render-display-${i}`, msg, tex);
       return `<pre class="nlm-math-error">$$${escapeHtml(tex)}$$</pre>`;
     }
   });
@@ -76,9 +102,8 @@ export function renderNotebookLmHtml(normalizedMarkdown: string): RenderResult {
         trust: false,
       });
     } catch (err) {
-      mathErrors.push(
-        `Inline equation #${Number(i) + 1} failed to render (${err instanceof Error ? err.message : String(err)}). Check its LaTeX syntax.`
-      );
+      const msg = `Inline equation #${Number(i) + 1} failed to render (${err instanceof Error ? err.message : String(err)}). Check its LaTeX syntax.`;
+      pushError(`render-inline-${i}`, msg, tex);
       return `<code class="nlm-math-error-inline">$${escapeHtml(tex)}$</code>`;
     }
   });
@@ -89,7 +114,7 @@ export function renderNotebookLmHtml(normalizedMarkdown: string): RenderResult {
     html = DOMPurify.sanitize(html, { ADD_ATTR: ["target", "rel"] });
   }
 
-  return { html, mathErrors };
+  return { html, mathErrors, fixable };
 }
 
 function escapeHtml(s: string): string {
