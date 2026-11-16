@@ -257,6 +257,10 @@ async function walkSpTree(st: WalkState, tree: XmlNode): Promise<void> {
       } else {
         st.unsupported.push("group without geometry");
       }
+    } else if (local !== "nvGrpSpPr" && local !== "grpSpPr") {
+      // Do not silently omit connectors, OLE objects, alternate content, or
+      // future DrawingML nodes that this handout renderer cannot reproduce.
+      st.unsupported.push(`${local} shape`);
     }
   }
 }

@@ -22,6 +22,11 @@ const chartFrame = `<p:graphicFrame>
   <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart/></a:graphicData></a:graphic>
 </p:graphicFrame>`;
 
+const connectorShape = `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="3" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="9144000" cy="4572000"/></a:xfrm></p:spPr>
+</p:cxnSp>`;
+
 async function fixture(body: string): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
@@ -60,6 +65,13 @@ const japaneseDeck = await extractDeckContent(await fixture(textShape("日本語
 await assert.rejects(
   () => deckContentToPdf(japaneseDeck, { deckName: "japanese-fixture" }),
   /embedded font cannot render these characters: 日/
+);
+
+const connectorDeck = await extractDeckContent(await fixture(connectorShape));
+assert.deepEqual(connectorDeck.unsupported, [{ slide: 1, kinds: ["cxnSp shape"] }]);
+await assert.rejects(
+  () => deckContentToPdf(connectorDeck, { deckName: "connector-fixture" }),
+  /unsupported visual content.*slide 1: cxnSp shape/
 );
 
 console.log("pptx-pdf regression fixtures passed");
