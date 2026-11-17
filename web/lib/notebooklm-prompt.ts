@@ -32,6 +32,21 @@ Use concepts such as:
 
 These are **guidelines, not a mandatory template**. Give difficult or important concepts enough depth, and keep simple material concise. **Do not omit important details just because they don't fit a particular structure.** The notes should be detailed enough to study from without constantly referring back to the slides.
 
+## Coverage and evidence
+
+Use the current syllabus and lecture sequence to build a topic checklist, then cover every in-scope topic. Use PYQs to guide emphasis, **not to exclude topics that have not appeared before**. Allocate depth according to the sources and the nature of each topic, not a fixed theory-to-numericals ratio.
+
+Ground factual claims in the uploaded sources. Identify the source document and page/slide where available, especially for diagrams, derivations, and ambiguous points. Flag missing, unreadable, or contradictory material rather than inventing details or claiming complete coverage. Do not assume access to textbooks or other references that were not supplied. Clearly label any illustrative example you construct.
+
+## Topic-appropriate depth
+
+* **Theory and concepts:** Explain what the concept means, why it matters, how it works, and when it applies. Cover relevant assumptions, properties, distinctions, advantages, limitations, and applications. Include explanation/compare/justify-style answers and conceptual examples where useful. Do not reduce theoretical topics to formula lists or invent numerical exercises for them.
+* **Diagrams and visual reasoning:** Explain important source diagrams, architectures, graphs, and pipelines. Describe their labels, components, arrows/relationships, axes, and what the reader should conclude. Give clear instructions for redrawing an examinable diagram and identify its source figure/page when available. Do not silently omit a visual because it is not numerical; if it cannot be read or reproduced faithfully, state that limitation rather than fabricate it.
+* **Algorithms and processes:** Explain intuition, inputs/outputs, ordered steps, assumptions, and relevant complexity or failure cases. Include a trace or worked example when it helps understanding, using the conventions in the sources.
+* **Numericals and derivations:** Retain all in-scope formulas and derivations. Define symbols, units, assumptions, and applicability. For each distinct problem type, provide a representative worked example with the given values, method selection, substitutions, intermediate steps, final answer, and a sanity check. Preserve important variations and common mistakes; do not replace worked solutions with final formulas alone. Where source information is insufficient, flag the gap rather than invent an official solution.
+
+End with a concise revision checklist covering the key conceptual questions, diagrams, algorithms, and numerical methods actually present in the syllabus, plus any unresolved source gaps.
+
 ## PYQ Analysis
 
 Examine the uploaded sources for **previous-year question papers** and use them to understand the style, depth, and types of questions asked.
@@ -57,6 +72,8 @@ Include the **actual PYQ questions** that fall within the current syllabus. Pres
 Create **new questions** based on the patterns found in the relevant PYQs. Keep them strictly within the current syllabus and match their style, difficulty, depth, and reasoning requirements. Include an appropriate mix of conceptual, theoretical, algorithmic, and numerical questions where relevant.
 
 Clearly distinguish actual PYQs from generated questions. **Never present a generated question as a PYQ.**
+
+Include answers or answer outlines for practice questions, with full working for numerical questions and the necessary reasoning and diagram guidance for theoretical ones. If no PYQs were uploaded, say so briefly and create syllabus-based practice without claiming an observed exam pattern. Do not invent years, marks, or official marking schemes.
 
 ## Formatting
 
